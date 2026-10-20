@@ -1,0 +1,566 @@
+import os
+import curses
+
+from grass.highlight import language_name
+from grass.screen import apply_window_title, draw, setup_screen
+from grass.search import find_next
+
+TAB_WIDTH = 4
+MAX_UNDO = 200
+
+
+def plain_state():
+    state = {
+        "lines": [""],
+        "path": None,
+        "language": "text",
+        "modified": False,
+        "cx": 0,
+        "cy": 0,
+        "top": 0,
+        "left": 0,
+        "message": "",
+        "prompt": None,
+        "undo_stack": [],
+        "redo_stack": [],
+        "version": 0,
+        "spans": [],
+        "spans_version": -1,
+        "search_term": "",
+        "matches": [],
+        "search_version": -1,
+        "clipboard": None,
+        "title": None,
+        "quit": False,
+    }
+    return state
+
+
+def push_undo(state):
+    record = (list(state["lines"]), state["cx"], state["cy"])
+    state["undo_stack"].append(record)
+    if len(state["undo_stack"]) > MAX_UNDO:
+        state["undo_stack"].pop(0)
+    state["redo_stack"] = []
+    state["modified"] = True
+    state["version"] = state["version"] + 1
+
+
+def undo(state):
+    if len(state["undo_stack"]) == 0:
+        state["message"] = "Nothing to undo"
+        return
+    current = (list(state["lines"]), state["cx"], state["cy"])
+    state["redo_stack"].append(current)
+    record = state["undo_stack"].pop()
+    state["lines"] = record[0]
+    state["cx"] = record[1]
+    state["cy"] = record[2]
+    state["modified"] = True
+    state["version"] = state["version"] + 1
+    state["message"] = "Undo"
+
+
+def redo(state):
+    if len(state["redo_stack"]) == 0:
+        state["message"] = "Nothing to redo"
+        return
+    current = (list(state["lines"]), state["cx"], state["cy"])
+    state["undo_stack"].append(current)
+    record = state["redo_stack"].pop()
+    state["lines"] = record[0]
+    state["cx"] = record[1]
+    state["cy"] = record[2]
+    state["modified"] = True
+    state["version"] = state["version"] + 1
+    state["message"] = "Redo"
+
+
+def insert_text(state, text):
+    push_undo(state)
+    line = state["lines"][state["cy"]]
+    before = line[:state["cx"]]
+    after = line[state["cx"]:]
+    state["lines"][state["cy"]] = before + text + after
+    state["cx"] = state["cx"] + len(text)
+
+
+def insert_tab(state):
+    insert_text(state, " " * TAB_WIDTH)
+
+
+def leading_spaces(text):
+    result = ""
+    for character in text:
+        if character == " ":
+            result = result + character
+        elif character == "\t":
+            result = result + " " * TAB_WIDTH
+        else:
+            break
+    return result
+
+
+def insert_newline(state):
+    push_undo(state)
+    line = state["lines"][state["cy"]]
+    before = line[:state["cx"]]
+    after = line[state["cx"]:]
+    indent = leading_spaces(line)
+    if before.rstrip().endswith(":"):
+        indent = indent + " " * TAB_WIDTH
+    state["lines"][state["cy"]] = before
+    state["lines"].insert(state["cy"] + 1, indent + after)
+    state["cy"] = state["cy"] + 1
+    state["cx"] = len(indent)
+
+
+def backspace(state):
+    line = state["lines"][state["cy"]]
+    if state["cx"] > 0:
+        push_undo(state)
+        before = line[:state["cx"] - 1]
+        after = line[state["cx"]:]
+        state["lines"][state["cy"]] = before + after
+        state["cx"] = state["cx"] - 1
+        return
+    if state["cy"] > 0:
+        push_undo(state)
+        previous = state["lines"][state["cy"] - 1]
+        state["lines"][state["cy"] - 1] = previous + line
+        del state["lines"][state["cy"]]
+        state["cy"] = state["cy"] - 1
+        state["cx"] = len(previous)
+
+
+def delete_forward(state):
+    line = state["lines"][state["cy"]]
+    if state["cx"] < len(line):
+        push_undo(state)
+        before = line[:state["cx"]]
+        after = line[state["cx"] + 1:]
+        state["lines"][state["cy"]] = before + after
+        return
+    if state["cy"] < len(state["lines"]) - 1:
+        push_undo(state)
+        next_line = state["lines"][state["cy"] + 1]
+        state["lines"][state["cy"]] = line + next_line
+        del state["lines"][state["cy"] + 1]
+
+
+def cut_line(state):
+    push_undo(state)
+    state["clipboard"] = state["lines"][state["cy"]]
+    del state["lines"][state["cy"]]
+    if len(state["lines"]) == 0:
+        state["lines"].append("")
+    if state["cy"] >= len(state["lines"]):
+        state["cy"] = len(state["lines"]) - 1
+    clamp_column(state)
+    state["message"] = "Cut line"
+
+
+def paste_line(state):
+    if state["clipboard"] is None:
+        state["message"] = "Nothing to paste"
+        return
+    push_undo(state)
+    if len(state["lines"]) == 1 and state["lines"][0] == "":
+        state["lines"][0] = state["clipboard"]
+    else:
+        state["lines"].insert(state["cy"], state["clipboard"])
+    state["cx"] = len(state["clipboard"])
+    state["message"] = "Pasted line"
+
+
+def clamp_column(state):
+    line = state["lines"][state["cy"]]
+    if state["cx"] > len(line):
+        state["cx"] = len(line)
+
+
+def move_left(state):
+    if state["cx"] > 0:
+        state["cx"] = state["cx"] - 1
+        return
+    if state["cy"] > 0:
+        state["cy"] = state["cy"] - 1
+        state["cx"] = len(state["lines"][state["cy"]])
+
+
+def move_right(state):
+    line = state["lines"][state["cy"]]
+    if state["cx"] < len(line):
+        state["cx"] = state["cx"] + 1
+        return
+    if state["cy"] < len(state["lines"]) - 1:
+        state["cy"] = state["cy"] + 1
+        state["cx"] = 0
+
+
+def move_up(state):
+    if state["cy"] > 0:
+        state["cy"] = state["cy"] - 1
+        clamp_column(state)
+
+
+def move_down(state):
+    if state["cy"] < len(state["lines"]) - 1:
+        state["cy"] = state["cy"] + 1
+        clamp_column(state)
+
+
+def move_home(state):
+    state["cx"] = 0
+
+
+def move_end(state):
+    state["cx"] = len(state["lines"][state["cy"]])
+
+
+def view_rows():
+    rows = curses.LINES - 2
+    if rows < 1:
+        rows = 1
+    return rows
+
+
+def page_up(state):
+    state["cy"] = state["cy"] - view_rows()
+    if state["cy"] < 0:
+        state["cy"] = 0
+    clamp_column(state)
+
+
+def page_down(state):
+    state["cy"] = state["cy"] + view_rows()
+    last = len(state["lines"]) - 1
+    if state["cy"] > last:
+        state["cy"] = last
+    clamp_column(state)
+
+
+def folder_exists(path):
+    folder = os.path.dirname(path)
+    if folder == "":
+        folder = "."
+    return os.path.isdir(folder)
+
+
+def split_lines(text):
+    lines = text.splitlines()
+    if len(lines) == 0:
+        lines = [""]
+    clean = []
+    for line in lines:
+        clean.append(line.replace("\t", " " * TAB_WIDTH))
+    return clean
+
+
+def reset_buffer(state):
+    state["lines"] = [""]
+    state["cx"] = 0
+    state["cy"] = 0
+    state["top"] = 0
+    state["left"] = 0
+    state["modified"] = False
+    state["undo_stack"] = []
+    state["redo_stack"] = []
+    state["version"] = state["version"] + 1
+
+
+def load_file(state, path):
+    if os.path.isdir(path):
+        state["message"] = "Cannot open: that is a folder"
+        return
+    if os.path.exists(path):
+        try:
+            handle = open(path, "r", encoding="utf-8")
+            text = handle.read()
+            handle.close()
+        except OSError as error:
+            state["message"] = "Cannot open: " + str(error)
+            return
+        except UnicodeError:
+            state["message"] = "Cannot open: not a text file"
+            return
+        reset_buffer(state)
+        state["lines"] = split_lines(text)
+        state["path"] = path
+        state["language"] = language_name(path)
+        state["message"] = "Opened " + path
+        return
+    reset_buffer(state)
+    state["path"] = path
+    state["language"] = language_name(path)
+    state["message"] = "New file: press Ctrl-S to save"
+
+
+def save_file(state):
+    path = state["path"]
+    if path is None:
+        start_save_as_prompt(state, False)
+        return
+    if not folder_exists(path):
+        state["message"] = "Cannot save: folder does not exist"
+        return
+    text = "\n".join(state["lines"])
+    if len(state["lines"]) > 1 or state["lines"][0] != "":
+        text = text + "\n"
+    try:
+        handle = open(path, "w", encoding="utf-8")
+        handle.write(text)
+        handle.close()
+    except OSError as error:
+        state["message"] = "Cannot save: " + str(error)
+        return
+    state["modified"] = False
+    state["message"] = "Saved " + path
+
+
+def start_open_prompt(state):
+    state["prompt"] = {
+        "kind": "open",
+        "question": "Open: ",
+        "input": "",
+    }
+
+
+def start_save_as_prompt(state, then_quit):
+    guessed = state["path"]
+    if guessed is None:
+        guessed = ""
+    state["prompt"] = {
+        "kind": "save_as",
+        "question": "Save as: ",
+        "input": guessed,
+        "then_quit": then_quit,
+    }
+
+
+def quit_editor(state):
+    if not state["modified"]:
+        state["quit"] = True
+        return
+    if state["path"] is None:
+        start_save_as_prompt(state, True)
+        return
+    state["prompt"] = {
+        "kind": "quit",
+        "question": "Save changes before quitting? (y = save, n = discard) ",
+        "input": "",
+    }
+
+
+def finish_open(state):
+    prompt = state["prompt"]
+    typed = prompt["input"].strip()
+    state["prompt"] = None
+    if typed == "":
+        state["message"] = "Cancelled"
+        return
+    path = os.path.expanduser(typed)
+    if state["modified"]:
+        state["prompt"] = {
+            "kind": "discard_open",
+            "question": "Discard unsaved changes? (y/n) ",
+            "input": "",
+            "path": path,
+        }
+        return
+    load_file(state, path)
+
+
+def finish_save_as(state):
+    prompt = state["prompt"]
+    typed = prompt["input"].strip()
+    state["prompt"] = None
+    if typed == "":
+        state["message"] = "Cancelled"
+        return
+    path = os.path.expanduser(typed)
+    if os.path.isdir(path):
+        state["message"] = "Cannot save: that is a folder"
+        return
+    if not folder_exists(path):
+        state["message"] = "Cannot save: folder does not exist"
+        return
+    state["path"] = path
+    state["language"] = language_name(path)
+    save_file(state)
+    if prompt["then_quit"] and not state["modified"]:
+        state["quit"] = True
+
+
+def start_search_prompt(state):
+    state["prompt"] = {
+        "kind": "search",
+        "question": "Find: ",
+        "input": state["search_term"],
+    }
+
+
+def finish_search(state):
+    prompt = state["prompt"]
+    typed = prompt["input"].strip()
+    state["prompt"] = None
+    if typed == "":
+        state["message"] = "Cancelled"
+        return
+    state["search_term"] = typed
+    state["search_version"] = -1
+    find_next(state)
+
+
+def search_again(state):
+    if state["search_term"] == "":
+        start_search_prompt(state)
+        return
+    find_next(state)
+
+
+def clear_search(state):
+    if state["search_term"] == "":
+        return
+    state["search_term"] = ""
+    state["search_version"] = -1
+    state["message"] = "Search cleared"
+
+
+def answer_yes(state, prompt):
+    kind = prompt["kind"]
+    state["prompt"] = None
+    if kind == "quit":
+        save_file(state)
+        if not state["modified"]:
+            state["quit"] = True
+        return
+    if kind == "discard_open":
+        load_file(state, prompt["path"])
+
+
+def answer_no(state, prompt):
+    kind = prompt["kind"]
+    state["prompt"] = None
+    if kind == "quit":
+        state["quit"] = True
+        return
+    state["message"] = "Cancelled"
+
+
+def finish_prompt(state):
+    kind = state["prompt"]["kind"]
+    if kind == "open":
+        finish_open(state)
+        return
+    if kind == "save_as":
+        finish_save_as(state)
+        return
+    if kind == "search":
+        finish_search(state)
+
+
+def handle_prompt_control(state, prompt, key):
+    if key == 27:
+        state["prompt"] = None
+        state["message"] = "Cancelled"
+        return
+    if key == 10 or key == 13 or key == curses.KEY_ENTER:
+        finish_prompt(state)
+        return
+    if key == curses.KEY_BACKSPACE or key == 8 or key == 127:
+        text = prompt["input"]
+        if len(text) > 0:
+            prompt["input"] = text[:-1]
+
+
+def handle_prompt_key(state, key):
+    prompt = state["prompt"]
+    if isinstance(key, int):
+        handle_prompt_control(state, prompt, key)
+        return
+    if not isinstance(key, str):
+        return
+    if len(key) == 1:
+        code = ord(key)
+        if code < 32 or code == 127:
+            handle_prompt_control(state, prompt, code)
+            return
+    kind = prompt["kind"]
+    if kind == "open" or kind == "save_as" or kind == "search":
+        prompt["input"] = prompt["input"] + key
+        return
+    if kind == "quit" or kind == "discard_open":
+        if key == "y" or key == "Y":
+            answer_yes(state, prompt)
+            return
+        if key == "n" or key == "N":
+            answer_no(state, prompt)
+
+
+HANDLERS = {
+    3: quit_editor,
+    6: start_search_prompt,
+    8: backspace,
+    9: insert_tab,
+    10: insert_newline,
+    11: cut_line,
+    13: insert_newline,
+    15: start_open_prompt,
+    17: quit_editor,
+    18: redo,
+    19: save_file,
+    21: paste_line,
+    26: undo,
+    27: clear_search,
+    127: backspace,
+    curses.KEY_BACKSPACE: backspace,
+    curses.KEY_DC: delete_forward,
+    curses.KEY_LEFT: move_left,
+    curses.KEY_RIGHT: move_right,
+    curses.KEY_UP: move_up,
+    curses.KEY_DOWN: move_down,
+    curses.KEY_HOME: move_home,
+    curses.KEY_END: move_end,
+    curses.KEY_PPAGE: page_up,
+    curses.KEY_NPAGE: page_down,
+    curses.KEY_ENTER: insert_newline,
+    curses.KEY_F3: search_again,
+}
+
+
+def handle_key(state, key):
+    if state["prompt"] is not None:
+        handle_prompt_key(state, key)
+        return
+    if isinstance(key, int):
+        handler = HANDLERS.get(key)
+        if handler is not None:
+            handler(state)
+        return
+    if not isinstance(key, str):
+        return
+    if len(key) == 1:
+        code = ord(key)
+        if code < 32 or code == 127:
+            handler = HANDLERS.get(code)
+            if handler is not None:
+                handler(state)
+            return
+    insert_text(state, key)
+
+
+def run(screen, path):
+    setup_screen(screen)
+    state = plain_state()
+    if path is not None:
+        load_file(state, path)
+    while not state["quit"]:
+        apply_window_title(state)
+        draw(screen, state)
+        try:
+            key = screen.get_wch()
+        except curses.error:
+            continue
+        state["message"] = ""
+        handle_key(state, key)

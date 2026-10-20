@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "grass"
+version = "0.1.0"
+description = "A minimal, beautiful, zero-config terminal code editor."
+requires-python = ">=3.8"
+dependencies = ["pygments>=2.6"]
+
+[project.scripts]
+grass = "grass.main:main"
+
+[tool.setuptools.packages.find]
+include = ["grass*"]

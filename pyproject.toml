@@ -4,13 +4,37 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "grass"
-version = "0.1.0"
-description = "A minimal, beautiful, zero-config terminal code editor."
+dynamic = ["version"]
+description = "A calm, zero-config terminal editor — beautiful by default, hackable in an afternoon."
+readme = "README.md"
 requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "Mukund Jha", email = "mukundzha33@gmail.com" }]
+keywords = ["editor", "terminal", "tui", "curses", "text-editor", "cli"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Environment :: Console :: Curses",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Text Editors",
+    "Topic :: Text Editors :: Text Processing",
+]
 dependencies = ["pygments>=2.6"]
+
+[project.urls]
+Homepage = "https://github.com/mukundzha/grass"
+Repository = "https://github.com/mukundzha/grass"
+Issues = "https://github.com/mukundzha/grass/issues"
 
 [project.scripts]
 grass = "grass.main:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "grass.VERSION" }
 
 [tool.setuptools.packages.find]
 include = ["grass*"]

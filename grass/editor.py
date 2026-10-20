@@ -7,6 +7,9 @@ from grass.search import find_next
 
 TAB_WIDTH = 4
 MAX_UNDO = 200
+MAX_FINDER_FILES = 5000
+FINDER_SKIP_DIRS = ("__pycache__", "node_modules", "venv", "env", "dist", "build")
+PROJECT_MARKERS = (".git", "pyproject.toml", "setup.py", "setup.cfg", "package.json", "Cargo.toml", "go.mod", "Makefile")
 
 
 def plain_state():
@@ -32,6 +35,10 @@ def plain_state():
         "search_version": -1,
         "clipboard": None,
         "escape": None,
+        "finder_files": [],
+        "finder_matches": [],
+        "finder_selected": 0,
+        "finder_root": "",
         "title": None,
         "quit": False,
     }
@@ -342,6 +349,122 @@ def start_open_prompt(state):
     }
 
 
+def collect_project_files(root):
+    files = []
+    for walk_root, dirs, names in os.walk(root):
+        kept = []
+        for name in dirs:
+            if name.startswith("."):
+                continue
+            if name in FINDER_SKIP_DIRS:
+                continue
+            if name.endswith(".egg-info"):
+                continue
+            kept.append(name)
+        dirs[:] = kept
+        for name in names:
+            if name.startswith("."):
+                continue
+            full = os.path.join(walk_root, name)
+            files.append(os.path.relpath(full, root))
+            if len(files) >= MAX_FINDER_FILES:
+                return files
+    return files
+
+
+def is_subsequence(text, query):
+    position = 0
+    for character in query:
+        found = text.find(character, position)
+        if found == -1:
+            return False
+        position = found + 1
+    return True
+
+
+def find_project_root(start):
+    current = os.path.abspath(start)
+    while True:
+        for marker in PROJECT_MARKERS:
+            if os.path.exists(os.path.join(current, marker)):
+                return current
+        parent = os.path.dirname(current)
+        if parent == current:
+            return os.path.abspath(start)
+        current = parent
+
+
+def fuzzy_score(path, query):
+    name = os.path.basename(path)
+    if name.startswith(query):
+        return 0
+    if query in name:
+        return 1
+    if is_subsequence(name, query):
+        return 2
+    if query in path:
+        return 3
+    if is_subsequence(path, query):
+        return 4
+    return None
+
+
+def refresh_finder(state):
+    query = state["prompt"]["input"].lower()
+    matches = []
+    for path in state["finder_files"]:
+        score = fuzzy_score(path.lower(), query)
+        if score is None:
+            continue
+        matches.append((score, len(path), path))
+    matches.sort()
+    state["finder_matches"] = []
+    for entry in matches:
+        state["finder_matches"].append(entry[2])
+    state["finder_selected"] = 0
+
+
+def start_finder(state):
+    path = state["path"]
+    if path is None:
+        base = os.getcwd()
+    else:
+        base = os.path.dirname(os.path.abspath(path))
+    root = find_project_root(base)
+    state["finder_root"] = root
+    state["finder_files"] = collect_project_files(root)
+    state["prompt"] = {
+        "kind": "find_file",
+        "question": "Find file: ",
+        "input": "",
+    }
+    refresh_finder(state)
+
+
+def finder_move(state, delta):
+    count = len(state["finder_matches"])
+    if count == 0:
+        return
+    selected = state["finder_selected"] + delta
+    if selected < 0:
+        selected = 0
+    if selected >= count:
+        selected = count - 1
+    state["finder_selected"] = selected
+
+
+def finish_finder(state):
+    matches = state["finder_matches"]
+    if len(matches) == 0:
+        state["prompt"] = None
+        state["message"] = "No files"
+        return
+    selected = state["finder_selected"]
+    path = os.path.join(state["finder_root"], matches[selected])
+    state["prompt"] = {"kind": "open", "question": "Open: ", "input": path}
+    finish_open(state)
+
+
 def start_save_as_prompt(state, then_quit):
     guessed = state["path"]
     if guessed is None:
@@ -474,9 +597,19 @@ def finish_prompt(state):
         return
     if kind == "search":
         finish_search(state)
+        return
+    if kind == "find_file":
+        finish_finder(state)
 
 
 def handle_prompt_control(state, prompt, key):
+    if prompt["kind"] == "find_file":
+        if key == curses.KEY_UP:
+            finder_move(state, -1)
+            return
+        if key == curses.KEY_DOWN:
+            finder_move(state, 1)
+            return
     if key == 27:
         state["prompt"] = None
         state["message"] = "Cancelled"
@@ -488,6 +621,8 @@ def handle_prompt_control(state, prompt, key):
         text = prompt["input"]
         if len(text) > 0:
             prompt["input"] = text[:-1]
+            if prompt["kind"] == "find_file":
+                refresh_finder(state)
 
 
 def handle_prompt_key(state, key):
@@ -506,6 +641,10 @@ def handle_prompt_key(state, key):
     if kind == "open" or kind == "save_as" or kind == "search":
         prompt["input"] = prompt["input"] + key
         return
+    if kind == "find_file":
+        prompt["input"] = prompt["input"] + key
+        refresh_finder(state)
+        return
     if kind == "quit" or kind == "discard_open":
         if key == "y" or key == "Y":
             answer_yes(state, prompt)
@@ -523,6 +662,7 @@ HANDLERS = {
     11: cut_line,
     13: insert_newline,
     15: start_open_prompt,
+    16: start_finder,
     17: quit_editor,
     18: redo,
     19: save_file,
@@ -571,31 +711,33 @@ def escape_is_prefix(buffer):
     return False
 
 
+def finish_escape(state):
+    state["escape"] = None
+    if state["prompt"] is not None:
+        state["prompt"] = None
+        state["message"] = "Cancelled"
+        return
+    clear_search(state)
+
+
 def handle_escape_key(state, key):
     prefix = state["escape"]
     if not isinstance(key, str) or len(key) != 1:
-        state["escape"] = None
-        clear_search(state)
+        finish_escape(state)
         return
     buffer = prefix + key
     if buffer in ESCAPE_SEQUENCES:
         state["escape"] = None
-        handler = HANDLERS.get(ESCAPE_SEQUENCES[buffer])
-        if handler is not None:
-            handler(state)
+        handle_key(state, ESCAPE_SEQUENCES[buffer])
         return
     if escape_is_prefix(buffer):
         state["escape"] = buffer
         return
-    state["escape"] = None
-    clear_search(state)
+    finish_escape(state)
     handle_key(state, key)
 
 
 def handle_key(state, key):
-    if state["prompt"] is not None:
-        handle_prompt_key(state, key)
-        return
     if state["escape"] is not None:
         handle_escape_key(state, key)
         return
@@ -603,6 +745,14 @@ def handle_key(state, key):
         if key == 27:
             state["escape"] = ""
             return
+    if isinstance(key, str) and len(key) == 1:
+        if ord(key) == 27:
+            state["escape"] = ""
+            return
+    if state["prompt"] is not None:
+        handle_prompt_key(state, key)
+        return
+    if isinstance(key, int):
         handler = HANDLERS.get(key)
         if handler is not None:
             handler(state)
@@ -611,9 +761,6 @@ def handle_key(state, key):
         return
     if len(key) == 1:
         code = ord(key)
-        if code == 27:
-            state["escape"] = ""
-            return
         if code < 32 or code == 127:
             handler = HANDLERS.get(code)
             if handler is not None:
@@ -638,8 +785,7 @@ def run(screen, path):
             key = screen.get_wch()
         except curses.error:
             if state["escape"] is not None:
-                state["escape"] = None
-                clear_search(state)
+                finish_escape(state)
             continue
         state["message"] = ""
         handle_key(state, key)

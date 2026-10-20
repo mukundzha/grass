@@ -72,6 +72,7 @@ basic colors fall back gracefully.
 | Tab | insert 4 spaces |
 | Backspace, Delete | delete |
 | Ctrl-F | find (Enter jumps, repeat for the next match) |
+| Ctrl-P | open a file by fuzzy search |
 | Ctrl-K | cut line |
 | Ctrl-U | paste line |
 | Ctrl-S | save |

@@ -1,3 +1,7 @@
+import os
+import shutil
+import tempfile
+
 from grass import editor
 
 
@@ -313,3 +317,158 @@ def test_delete_then_retype_is_clean_again():
     editor.insert_text(state, "[")
     editor.update_modified(state)
     assert state["modified"] is False
+
+
+def test_fuzzy_filter_keeps_subsequence_matches():
+    state = editor.plain_state()
+    state["finder_root"] = "/project"
+    state["finder_files"] = ["alpha.py", os.path.join("src", "gamma.py"), "beta.txt"]
+    state["prompt"] = {"kind": "find_file", "question": "Find file: ", "input": "gma"}
+    editor.refresh_finder(state)
+    assert state["finder_matches"] == [os.path.join("src", "gamma.py")]
+    assert state["finder_selected"] == 0
+
+
+def test_finder_move_clamps_selection():
+    state = editor.plain_state()
+    state["finder_matches"] = ["a.py", "b.py"]
+    state["finder_selected"] = 0
+    editor.finder_move(state, -1)
+    assert state["finder_selected"] == 0
+    editor.finder_move(state, 9)
+    assert state["finder_selected"] == 1
+
+
+def test_find_project_root_walks_up_to_marker():
+    root = tempfile.mkdtemp()
+    try:
+        handle = open(os.path.join(root, "pyproject.toml"), "w")
+        handle.write("")
+        handle.close()
+        nested = os.path.join(root, "src", "deep")
+        os.makedirs(nested)
+        assert editor.find_project_root(nested) == os.path.abspath(root)
+    finally:
+        shutil.rmtree(root)
+
+
+def test_start_finder_uses_project_root():
+    root = tempfile.mkdtemp()
+    try:
+        handle = open(os.path.join(root, "pyproject.toml"), "w")
+        handle.write("")
+        handle.close()
+        os.mkdir(os.path.join(root, "grass"))
+        path = os.path.join(root, "grass", "editor.py")
+        handle = open(path, "w")
+        handle.write("x\n")
+        handle.close()
+        state = editor.plain_state()
+        state["path"] = path
+        editor.start_finder(state)
+        assert state["finder_root"] == os.path.abspath(root)
+    finally:
+        shutil.rmtree(root)
+
+
+def test_finder_ranks_basename_prefix_first():
+    state = editor.plain_state()
+    state["finder_root"] = "/project"
+    state["finder_files"] = ["README.md", os.path.join("src", "editor.py")]
+    state["prompt"] = {"kind": "find_file", "question": "Find file: ", "input": "ed"}
+    editor.refresh_finder(state)
+    assert state["finder_matches"][0] == os.path.join("src", "editor.py")
+
+
+def test_collect_project_files_skips_hidden_and_noise():
+    root = tempfile.mkdtemp()
+    try:
+        handle = open(os.path.join(root, "alpha.py"), "w")
+        handle.write("a\n")
+        handle.close()
+        os.mkdir(os.path.join(root, "src"))
+        handle = open(os.path.join(root, "src", "gamma.py"), "w")
+        handle.write("g\n")
+        handle.close()
+        os.mkdir(os.path.join(root, ".hidden"))
+        handle = open(os.path.join(root, ".hidden", "secret.py"), "w")
+        handle.write("s\n")
+        handle.close()
+        os.mkdir(os.path.join(root, "__pycache__"))
+        handle = open(os.path.join(root, "__pycache__", "junk.pyc"), "w")
+        handle.write("j\n")
+        handle.close()
+        files = editor.collect_project_files(root)
+        assert "alpha.py" in files
+        assert os.path.join("src", "gamma.py") in files
+        assert os.path.join(".hidden", "secret.py") not in files
+        assert os.path.join("__pycache__", "junk.pyc") not in files
+    finally:
+        shutil.rmtree(root)
+
+
+def test_finish_finder_opens_selected_file():
+    root = tempfile.mkdtemp()
+    try:
+        path = os.path.join(root, "target.py")
+        handle = open(path, "w")
+        handle.write("print(1)\n")
+        handle.close()
+        state = editor.plain_state()
+        state["finder_root"] = root
+        state["finder_files"] = ["target.py"]
+        state["prompt"] = {"kind": "find_file", "question": "Find file: ", "input": "tar"}
+        editor.refresh_finder(state)
+        editor.finish_finder(state)
+        assert state["path"] == path
+        assert state["lines"] == ["print(1)"]
+        assert state["modified"] is False
+    finally:
+        shutil.rmtree(root)
+
+
+def test_finish_finder_asks_before_discarding():
+    state = editor.plain_state()
+    state["modified"] = True
+    state["finder_root"] = "/project"
+    state["finder_matches"] = ["target.py"]
+    state["finder_selected"] = 0
+    state["prompt"] = {"kind": "find_file", "question": "Find file: ", "input": ""}
+    editor.finish_finder(state)
+    assert state["prompt"]["kind"] == "discard_open"
+    assert state["prompt"]["path"] == os.path.join("/project", "target.py")
+
+
+def test_ctrl_p_opens_finder():
+    root = tempfile.mkdtemp()
+    try:
+        handle = open(os.path.join(root, "demo.py"), "w")
+        handle.write("x\n")
+        handle.close()
+        state = editor.plain_state()
+        state["path"] = os.path.join(root, "demo.py")
+        editor.handle_key(state, "\x10")
+        assert state["prompt"]["kind"] == "find_file"
+        assert "demo.py" in state["finder_matches"]
+    finally:
+        shutil.rmtree(root)
+
+
+def test_finish_escape_cancels_prompt():
+    state = editor.plain_state()
+    state["prompt"] = {"kind": "open", "question": "Open: ", "input": ""}
+    state["escape"] = ""
+    editor.finish_escape(state)
+    assert state["prompt"] is None
+
+
+def test_finder_arrow_sequence_moves_selection():
+    state = editor.plain_state()
+    state["finder_matches"] = ["a.py", "b.py"]
+    state["finder_selected"] = 0
+    state["prompt"] = {"kind": "find_file", "question": "Find file: ", "input": ""}
+    editor.handle_key(state, "\x1b")
+    editor.handle_key(state, "[")
+    editor.handle_key(state, "B")
+    assert state["finder_selected"] == 1
+    assert state["prompt"]["kind"] == "find_file"

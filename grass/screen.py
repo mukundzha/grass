@@ -8,6 +8,7 @@ from grass.search import update_matches
 
 STRIP_BACKGROUND = 236
 STATUS_BACKGROUND = 237
+FINDER_ROWS = 8
 
 REVERSE_NAMES = ("status", "status_name", "status_dim", "status_modified", "match", "match_current")
 
@@ -195,7 +196,7 @@ def safe_addstr(screen, row, column, text, style):
 
 def fill_row(screen, row, width, color_name):
     try:
-        screen.chgat(row, 0, width, attr(color_name))
+        screen.addstr(row, 0, " " * width, attr(color_name))
     except curses.error:
         pass
 
@@ -361,6 +362,7 @@ def draw(screen, state):
         else:
             draw_text_area(screen, state, height, width)
             draw_scrollbar(screen, state, height, width)
+        draw_finder(screen, state, height, width)
         draw_message_bar(screen, state, height, width)
         draw_status_bar(screen, state, height, width)
         place_cursor(screen, state, height, width)
@@ -464,6 +466,32 @@ def draw_matches(screen, state, row, line_index, gutter, text_width):
         piece = state["lines"][line_index][take_start:take_end]
         column = gutter + (take_start - left)
         safe_addstr(screen, row, column, piece, attr(color))
+
+
+def draw_finder(screen, state, height, width):
+    prompt = state["prompt"]
+    if prompt is None or prompt["kind"] != "find_file":
+        return
+    matches = state["finder_matches"]
+    selected = state["finder_selected"]
+    start = selected - FINDER_ROWS + 1
+    if start < 0:
+        start = 0
+    row = height - 3
+    stop = height - 3 - FINDER_ROWS
+    while row > stop and row >= 0:
+        fill_row(screen, row, width, "strip")
+        row = row - 1
+    index = start
+    row = height - 3
+    while index < len(matches) and row >= 0:
+        if index == selected:
+            fill_row(screen, row, width, "status")
+            safe_addstr(screen, row, 2, matches[index], attr("status"))
+        else:
+            safe_addstr(screen, row, 2, matches[index], attr("message"))
+        index = index + 1
+        row = row - 1
 
 
 def draw_message_bar(screen, state, height, width):

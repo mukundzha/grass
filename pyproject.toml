@@ -9,7 +9,7 @@ description = "A calm, zero-config terminal editor — beautiful by default, hac
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT" }
-authors = [{ name = "Mukund Jha", email = "mukundzha33@gmail.com" }]
+authors = [{ name = "Mukund Jha" }]
 keywords = ["editor", "terminal", "tui", "curses", "text-editor", "cli"]
 classifiers = [
     "Development Status :: 3 - Alpha",

@@ -86,6 +86,12 @@ def setup_screen(screen):
         pass
     screen.keypad(True)
     try:
+        curses.set_escdelay(25)
+    except AttributeError:
+        pass
+    except curses.error:
+        pass
+    try:
         curses.curs_set(1)
     except curses.error:
         pass

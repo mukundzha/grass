@@ -232,7 +232,30 @@ def test_escape_clears_search():
     state["search_term"] = "foo"
     state["search_version"] = -1
     editor.handle_key(state, "\x1b")
+    editor.handle_key(state, "x")
     assert state["search_term"] == ""
+
+
+def test_normal_mode_arrow_moves_without_editing():
+    state = editor.plain_state()
+    state["lines"] = ["one", "two"]
+    state["cy"] = 1
+    state["cx"] = 2
+    editor.handle_key(state, "\x1b")
+    editor.handle_key(state, "[")
+    editor.handle_key(state, "A")
+    assert state["cy"] == 0
+    assert state["lines"] == ["one", "two"]
+    assert state["modified"] is False
+    assert state["escape"] is None
+
+
+def test_key_after_escape_is_typed():
+    state = editor.plain_state()
+    editor.handle_key(state, "\x1b")
+    editor.handle_key(state, "x")
+    assert state["lines"][0] == "x"
+    assert state["modified"] is True
 
 
 def test_finish_search_jumps_to_first_match():
@@ -259,3 +282,34 @@ def test_search_again_with_term_finds_next():
     editor.search_again(state)
     assert state["cy"] == 1
     assert state["cx"] == 0
+
+
+def test_update_modified_clears_when_text_matches_saved():
+    state = editor.plain_state()
+    state["lines"] = ["["]
+    state["saved_text"] = "["
+    state["modified"] = True
+    editor.update_modified(state)
+    assert state["modified"] is False
+
+
+def test_update_modified_marks_different_text():
+    state = editor.plain_state()
+    state["lines"] = ["["]
+    state["saved_text"] = "x"
+    state["modified"] = False
+    editor.update_modified(state)
+    assert state["modified"] is True
+
+
+def test_delete_then_retype_is_clean_again():
+    state = editor.plain_state()
+    state["lines"] = ["["]
+    state["saved_text"] = "["
+    state["cx"] = 1
+    editor.backspace(state)
+    editor.update_modified(state)
+    assert state["modified"] is True
+    editor.insert_text(state, "[")
+    editor.update_modified(state)
+    assert state["modified"] is False

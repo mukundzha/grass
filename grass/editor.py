@@ -21,6 +21,7 @@ def plain_state():
         "left": 0,
         "message": "",
         "prompt": None,
+        "saved_text": "",
         "undo_stack": [],
         "redo_stack": [],
         "version": 0,
@@ -30,10 +31,22 @@ def plain_state():
         "matches": [],
         "search_version": -1,
         "clipboard": None,
+        "escape": None,
         "title": None,
         "quit": False,
     }
     return state
+
+
+def current_text(state):
+    return "\n".join(state["lines"])
+
+
+def update_modified(state):
+    if current_text(state) == state["saved_text"]:
+        state["modified"] = False
+    else:
+        state["modified"] = True
 
 
 def push_undo(state):
@@ -264,6 +277,7 @@ def reset_buffer(state):
     state["top"] = 0
     state["left"] = 0
     state["modified"] = False
+    state["saved_text"] = ""
     state["undo_stack"] = []
     state["redo_stack"] = []
     state["version"] = state["version"] + 1
@@ -286,6 +300,7 @@ def load_file(state, path):
             return
         reset_buffer(state)
         state["lines"] = split_lines(text)
+        state["saved_text"] = current_text(state)
         state["path"] = path
         state["language"] = language_name(path)
         state["message"] = "Opened " + path
@@ -315,6 +330,7 @@ def save_file(state):
         state["message"] = "Cannot save: " + str(error)
         return
     state["modified"] = False
+    state["saved_text"] = current_text(state)
     state["message"] = "Saved " + path
 
 
@@ -512,7 +528,6 @@ HANDLERS = {
     19: save_file,
     21: paste_line,
     26: undo,
-    27: clear_search,
     127: backspace,
     curses.KEY_BACKSPACE: backspace,
     curses.KEY_DC: delete_forward,
@@ -528,12 +543,66 @@ HANDLERS = {
     curses.KEY_F3: search_again,
 }
 
+ESCAPE_SEQUENCES = {
+    "[A": curses.KEY_UP,
+    "[B": curses.KEY_DOWN,
+    "[C": curses.KEY_RIGHT,
+    "[D": curses.KEY_LEFT,
+    "OA": curses.KEY_UP,
+    "OB": curses.KEY_DOWN,
+    "OC": curses.KEY_RIGHT,
+    "OD": curses.KEY_LEFT,
+    "[H": curses.KEY_HOME,
+    "[F": curses.KEY_END,
+    "OH": curses.KEY_HOME,
+    "OF": curses.KEY_END,
+    "[1~": curses.KEY_HOME,
+    "[4~": curses.KEY_END,
+    "[3~": curses.KEY_DC,
+    "[5~": curses.KEY_PPAGE,
+    "[6~": curses.KEY_NPAGE,
+}
+
+
+def escape_is_prefix(buffer):
+    for sequence in ESCAPE_SEQUENCES:
+        if sequence.startswith(buffer):
+            return True
+    return False
+
+
+def handle_escape_key(state, key):
+    prefix = state["escape"]
+    if not isinstance(key, str) or len(key) != 1:
+        state["escape"] = None
+        clear_search(state)
+        return
+    buffer = prefix + key
+    if buffer in ESCAPE_SEQUENCES:
+        state["escape"] = None
+        handler = HANDLERS.get(ESCAPE_SEQUENCES[buffer])
+        if handler is not None:
+            handler(state)
+        return
+    if escape_is_prefix(buffer):
+        state["escape"] = buffer
+        return
+    state["escape"] = None
+    clear_search(state)
+    handle_key(state, key)
+
 
 def handle_key(state, key):
     if state["prompt"] is not None:
         handle_prompt_key(state, key)
         return
+    if state["escape"] is not None:
+        handle_escape_key(state, key)
+        return
     if isinstance(key, int):
+        if key == 27:
+            state["escape"] = ""
+            return
         handler = HANDLERS.get(key)
         if handler is not None:
             handler(state)
@@ -542,6 +611,9 @@ def handle_key(state, key):
         return
     if len(key) == 1:
         code = ord(key)
+        if code == 27:
+            state["escape"] = ""
+            return
         if code < 32 or code == 127:
             handler = HANDLERS.get(code)
             if handler is not None:
@@ -558,9 +630,17 @@ def run(screen, path):
     while not state["quit"]:
         apply_window_title(state)
         draw(screen, state)
+        if state["escape"] is None:
+            screen.timeout(-1)
+        else:
+            screen.timeout(25)
         try:
             key = screen.get_wch()
         except curses.error:
+            if state["escape"] is not None:
+                state["escape"] = None
+                clear_search(state)
             continue
         state["message"] = ""
         handle_key(state, key)
+        update_modified(state)

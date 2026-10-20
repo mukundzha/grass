@@ -72,12 +72,9 @@ basic colors fall back gracefully.
 | Tab | insert 4 spaces |
 | Backspace, Delete | delete |
 | Ctrl-F | find (Enter jumps, repeat for the next match) |
-| F3 | find next |
-| Esc | clear search highlights |
 | Ctrl-K | cut line |
 | Ctrl-U | paste line |
 | Ctrl-S | save |
-| Ctrl-O | open a file |
 | Ctrl-Z | undo |
 | Ctrl-R | redo |
 | Ctrl-Q | quit |

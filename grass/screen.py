@@ -4,7 +4,7 @@ import sys
 
 from grass import VERSION
 from grass.highlight import get_spans
-from grass.search import update_matches
+from grass.search import index_at_cursor, update_matches
 
 STRIP_BACKGROUND = 236
 STATUS_BACKGROUND = 237
@@ -502,10 +502,28 @@ def draw_message_bar(screen, state, height, width):
         question = prompt["question"]
         safe_addstr(screen, row, 0, PROMPT_PREFIX, attr("accent"))
         safe_addstr(screen, row, len(PROMPT_PREFIX), question, attr("message"))
-        safe_addstr(screen, row, len(PROMPT_PREFIX) + len(question), prompt["input"], attr("prompt"))
+        input_column = len(PROMPT_PREFIX) + len(question)
+        safe_addstr(screen, row, input_column, prompt["input"], attr("prompt"))
         return
     if state["message"] != "":
         safe_addstr(screen, row, 1, state["message"], attr(message_color(state["message"])))
+
+
+def search_progress(state):
+    prompt = state["prompt"]
+    if prompt is None or prompt["kind"] != "search":
+        return ""
+    if prompt["input"] == "":
+        return ""
+    count = len(state["matches"])
+    if count == 0:
+        return "no matches"
+    index = index_at_cursor(state)
+    if index == -1:
+        if count == 1:
+            return "1 match"
+        return str(count) + " matches"
+    return str(index + 1) + " of " + str(count)
 
 
 def status_dot(state):
@@ -537,12 +555,19 @@ def draw_status_bar(screen, state, height, width):
         safe_addstr(screen, row, dot_column, dot, attr("status_modified"))
     right = str(state["cy"] + 1) + "," + str(state["cx"] + 1)
     right_column = width - len(right) - 2
-    safe_addstr(screen, row, right_column, right, attr("status_dim"))
+    left_limit = column + len(base) + 1
+    marker_column = right_column
+    progress = search_progress(state)
+    if progress != "":
+        marker_column = right_column - len(progress) - 2
+        if marker_column > left_limit:
+            safe_addstr(screen, row, marker_column, progress, attr("status_dim"))
     if missing_newline(state):
         marker = "no newline"
-        marker_column = right_column - len(marker) - 2
-        if marker_column > column + len(base) + 1:
-            safe_addstr(screen, row, marker_column, marker, attr("status_dim"))
+        no_newline_column = marker_column - len(marker) - 2
+        if no_newline_column > left_limit:
+            safe_addstr(screen, row, no_newline_column, marker, attr("status_dim"))
+    safe_addstr(screen, row, right_column, right, attr("status_dim"))
 
 
 def place_cursor(screen, state, height, width):

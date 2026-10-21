@@ -126,3 +126,18 @@ def test_missing_newline_flag():
     assert screen.missing_newline(state) is False
     state = {"lines": ["x", ""], "final_newline": False}
     assert screen.missing_newline(state) is False
+
+
+def test_search_progress_text():
+    state = {"prompt": {"kind": "search", "input": "foo"}, "matches": [(0, 0, 3)], "cy": 0, "cx": 0}
+    assert screen.search_progress(state) == "1 of 1"
+    state["matches"] = [(0, 0, 3), (1, 0, 3)]
+    assert screen.search_progress(state) == "1 of 2"
+    state["matches"] = []
+    assert screen.search_progress(state) == "no matches"
+    state["prompt"]["input"] = ""
+    assert screen.search_progress(state) == ""
+    state["prompt"] = {"kind": "open", "input": "x"}
+    assert screen.search_progress(state) == ""
+    state["prompt"] = None
+    assert screen.search_progress(state) == ""

@@ -333,6 +333,81 @@ def test_finish_search_jumps_to_first_match():
     assert state["cx"] == 6
 
 
+def test_search_prompt_updates_matches_while_typing():
+    state = editor.plain_state()
+    state["lines"] = ["alpha", "beta"]
+    editor.start_search_prompt(state)
+    editor.handle_key(state, "a")
+    assert state["search_term"] == "a"
+    assert len(state["matches"]) == 3
+    editor.handle_key(state, "l")
+    assert state["search_term"] == "al"
+    assert len(state["matches"]) == 1
+
+
+def test_search_prompt_backspace_updates_matches():
+    state = editor.plain_state()
+    state["lines"] = ["alpha", "beta"]
+    editor.start_search_prompt(state)
+    editor.handle_key(state, "a")
+    editor.handle_key(state, "l")
+    editor.handle_key(state, 127)
+    assert state["search_term"] == "a"
+    assert len(state["matches"]) == 3
+
+
+def test_search_prompt_slides_to_match():
+    state = editor.plain_state()
+    state["lines"] = ["one", "two foo", "foo three"]
+    state["cy"] = 0
+    state["cx"] = 0
+    editor.start_search_prompt(state)
+    editor.handle_key(state, "f")
+    assert state["cy"] == 1
+    assert state["cx"] == 4
+    assert state["prompt"]["kind"] == "search"
+
+
+def test_search_prompt_returns_to_anchor_without_matches():
+    state = editor.plain_state()
+    state["lines"] = ["needle", "other"]
+    state["cy"] = 1
+    state["cx"] = 2
+    editor.start_search_prompt(state)
+    editor.handle_key(state, "n")
+    assert state["cy"] == 0
+    assert state["cx"] == 0
+    editor.handle_key(state, "z")
+    assert state["cy"] == 1
+    assert state["cx"] == 2
+
+
+def test_search_enter_keeps_live_match():
+    state = editor.plain_state()
+    state["lines"] = ["foo", "foo"]
+    editor.start_search_prompt(state)
+    editor.handle_key(state, "f")
+    assert state["cy"] == 0
+    assert state["cx"] == 0
+    editor.handle_key(state, "\n")
+    assert state["prompt"] is None
+    assert state["message"] == "Match 1 of 2"
+
+
+def test_search_cancel_restores_previous_term():
+    state = editor.plain_state()
+    state["lines"] = ["alpha", "beta"]
+    state["search_term"] = "beta"
+    state["search_version"] = -1
+    editor.start_search_prompt(state)
+    assert state["prompt"]["input"] == "beta"
+    editor.handle_key(state, "x")
+    assert state["search_term"] == "betax"
+    editor.finish_escape(state)
+    assert state["prompt"] is None
+    assert state["search_term"] == "beta"
+
+
 def test_search_again_without_term_opens_prompt():
     state = editor.plain_state()
     editor.search_again(state)

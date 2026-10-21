@@ -15,6 +15,28 @@ def update_matches(state):
     state["search_version"] = state["version"]
 
 
+def index_at_cursor(state):
+    index = 0
+    for match in state["matches"]:
+        if match[0] == state["cy"] and match[1] == state["cx"]:
+            return index
+        index = index + 1
+    return -1
+
+
+def first_match_index(matches, cy, cx):
+    index = 0
+    for match in matches:
+        line = match[0]
+        start = match[1]
+        if line > cy:
+            return index
+        if line == cy and start >= cx:
+            return index
+        index = index + 1
+    return 0
+
+
 def find_next(state):
     update_matches(state)
     matches = state["matches"]

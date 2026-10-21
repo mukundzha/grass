@@ -71,7 +71,7 @@ basic colors fall back gracefully.
 | Enter | new line, with auto-indent |
 | Tab | insert 4 spaces |
 | Backspace, Delete | delete |
-| Ctrl-F | find (Enter jumps, repeat for the next match) |
+| Ctrl-F | find (jumps to matches as you type) |
 | Ctrl-P | open a file by fuzzy search |
 | Ctrl-K | cut line |
 | Ctrl-U | paste line |

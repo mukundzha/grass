@@ -3,7 +3,7 @@ import curses
 
 from grass.highlight import language_name
 from grass.screen import apply_window_title, draw, setup_screen
-from grass.search import find_next
+from grass.search import find_next, first_match_index, index_at_cursor, update_matches
 
 TAB_WIDTH = 4
 MAX_UNDO = 200
@@ -540,7 +540,37 @@ def start_search_prompt(state):
         "kind": "search",
         "question": "Find: ",
         "input": state["search_term"],
+        "original_term": state["search_term"],
+        "anchor_cy": state["cy"],
+        "anchor_cx": state["cx"],
     }
+
+
+def restore_search(state, prompt):
+    state["search_term"] = prompt.get("original_term", "")
+    state["search_version"] = -1
+    if "anchor_cy" in prompt:
+        state["cy"] = prompt["anchor_cy"]
+        state["cx"] = prompt["anchor_cx"]
+
+
+def update_search_prompt(state):
+    prompt = state["prompt"]
+    if prompt is None or prompt["kind"] != "search":
+        return
+    state["search_term"] = prompt["input"]
+    state["search_version"] = -1
+    update_matches(state)
+    anchor_cy = prompt["anchor_cy"]
+    anchor_cx = prompt["anchor_cx"]
+    if len(state["matches"]) == 0:
+        state["cy"] = anchor_cy
+        state["cx"] = anchor_cx
+        return
+    index = first_match_index(state["matches"], anchor_cy, anchor_cx)
+    match = state["matches"][index]
+    state["cy"] = match[0]
+    state["cx"] = match[1]
 
 
 def finish_search(state):
@@ -548,11 +578,17 @@ def finish_search(state):
     typed = prompt["input"].strip()
     state["prompt"] = None
     if typed == "":
+        restore_search(state, prompt)
         state["message"] = "Cancelled"
         return
     state["search_term"] = typed
     state["search_version"] = -1
-    find_next(state)
+    update_matches(state)
+    index = index_at_cursor(state)
+    if index == -1:
+        find_next(state)
+        return
+    state["message"] = "Match " + str(index + 1) + " of " + str(len(state["matches"]))
 
 
 def search_again(state):
@@ -615,6 +651,8 @@ def handle_prompt_control(state, prompt, key):
             finder_move(state, 1)
             return
     if key == 27:
+        if prompt["kind"] == "search":
+            restore_search(state, prompt)
         state["prompt"] = None
         state["message"] = "Cancelled"
         return
@@ -627,6 +665,8 @@ def handle_prompt_control(state, prompt, key):
             prompt["input"] = text[:-1]
             if prompt["kind"] == "find_file":
                 refresh_finder(state)
+            if prompt["kind"] == "search":
+                update_search_prompt(state)
 
 
 def handle_prompt_key(state, key):
@@ -642,8 +682,12 @@ def handle_prompt_key(state, key):
             handle_prompt_control(state, prompt, code)
             return
     kind = prompt["kind"]
-    if kind == "open" or kind == "save_as" or kind == "search":
+    if kind == "open" or kind == "save_as":
         prompt["input"] = prompt["input"] + key
+        return
+    if kind == "search":
+        prompt["input"] = prompt["input"] + key
+        update_search_prompt(state)
         return
     if kind == "find_file":
         prompt["input"] = prompt["input"] + key
@@ -717,7 +761,10 @@ def escape_is_prefix(buffer):
 
 def finish_escape(state):
     state["escape"] = None
-    if state["prompt"] is not None:
+    prompt = state["prompt"]
+    if prompt is not None:
+        if prompt["kind"] == "search":
+            restore_search(state, prompt)
         state["prompt"] = None
         state["message"] = "Cancelled"
         return

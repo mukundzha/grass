@@ -3,6 +3,7 @@ import shutil
 import tempfile
 
 from grass import editor
+from grass.tabs import expand_tabs
 
 
 def test_insert_text():
@@ -23,11 +24,55 @@ def test_enter_auto_indent():
     assert state["cx"] == 8
 
 
+def test_enter_auto_indent_keeps_tabs():
+    state = editor.plain_state()
+    editor.insert_text(state, "\tif ready:")
+    editor.insert_newline(state)
+    assert state["lines"][0] == "\tif ready:"
+    assert state["lines"][1] == "\t\t"
+    assert state["cy"] == 1
+    assert state["cx"] == 2
+
+
 def test_tab_inserts_spaces():
     state = editor.plain_state()
     editor.insert_tab(state)
     assert state["lines"][0] == "    "
     assert state["cx"] == 4
+
+
+def test_tab_inserts_spaces_to_next_stop():
+    state = editor.plain_state()
+    editor.insert_text(state, "ab")
+    editor.insert_tab(state)
+    assert state["lines"][0] == "ab  "
+    assert state["cx"] == 4
+
+
+def test_tab_matches_tab_indentation():
+    state = editor.plain_state()
+    state["lines"] = ["\tcode"]
+    editor.insert_tab(state)
+    assert state["lines"][0] == "\t\tcode"
+    assert state["cx"] == 1
+
+
+def test_expand_tabs_aligns_to_stops():
+    assert expand_tabs("a\tb") == "a   b"
+    assert expand_tabs("\tx") == "    x"
+
+
+def test_display_column_counts_tab_stops():
+    assert editor.display_column("a\tb", 0) == 0
+    assert editor.display_column("a\tb", 1) == 1
+    assert editor.display_column("a\tb", 2) == 4
+    assert editor.display_column("a\tb", 3) == 5
+
+
+def test_char_index_at_column_skips_tab_interior():
+    assert editor.char_index_at_column("a\tb", 3) == 1
+    assert editor.char_index_at_column("a\tb", 4) == 2
+    assert editor.char_index_at_column("a\tb", 5) == 3
 
 
 def test_backspace_deletes_character():
@@ -89,6 +134,17 @@ def test_move_down_clamps_column():
     assert state["cx"] == 1
 
 
+def test_move_keeps_visual_column_across_tabs():
+    state = editor.plain_state()
+    state["lines"] = ["\tcode", "    code"]
+    state["cy"] = 0
+    state["cx"] = 1
+    editor.move_down(state)
+    assert state["cx"] == 4
+    editor.move_up(state)
+    assert state["cx"] == 1
+
+
 def test_move_left_wraps_to_previous_line():
     state = editor.plain_state()
     editor.insert_text(state, "one")
@@ -106,7 +162,7 @@ def test_split_lines():
     lines = editor.split_lines("")
     assert lines == [""]
     lines = editor.split_lines("a\tb")
-    assert lines == ["a    b"]
+    assert lines == ["a\tb"]
 
 
 def test_load_and_save_keep_missing_final_newline():
@@ -148,6 +204,27 @@ def test_load_and_save_keep_final_newline():
         text = handle.read()
         handle.close()
         assert text == "one\ntwo\n"
+    finally:
+        shutil.rmtree(root)
+
+
+def test_load_and_save_keep_tabs():
+    root = tempfile.mkdtemp()
+    try:
+        path = os.path.join(root, "tabs.py")
+        original = "def greet():\n\treturn \"hi\"\n"
+        handle = open(path, "w")
+        handle.write(original)
+        handle.close()
+        state = editor.plain_state()
+        editor.load_file(state, path)
+        assert state["lines"] == ["def greet():", "\treturn \"hi\""]
+        assert state["modified"] is False
+        editor.save_file(state)
+        handle = open(path, "r")
+        text = handle.read()
+        handle.close()
+        assert text == original
     finally:
         shutil.rmtree(root)
 

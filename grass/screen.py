@@ -5,6 +5,7 @@ import sys
 from grass import VERSION
 from grass.highlight import get_spans
 from grass.search import index_at_cursor, update_matches
+from grass.tabs import display_column, expand_tabs
 
 STRIP_BACKGROUND = 236
 STATUS_BACKGROUND = 237
@@ -345,10 +346,11 @@ def sync_scroll(state, height, width):
     if state["cy"] >= state["top"] + view_rows:
         state["top"] = state["cy"] - view_rows + 1
     text_width = text_area_width(state, width)
-    if state["cx"] < state["left"]:
-        state["left"] = state["cx"]
-    if state["cx"] >= state["left"] + text_width:
-        state["left"] = state["cx"] - text_width + 1
+    cursor_column = display_column(state["lines"][state["cy"]], state["cx"])
+    if cursor_column < state["left"]:
+        state["left"] = cursor_column
+    if cursor_column >= state["left"] + text_width:
+        state["left"] = cursor_column - text_width + 1
 
 
 def draw(screen, state):
@@ -401,6 +403,7 @@ def draw_text_row(screen, state, row, line_index, gutter, text_width, width):
 
 def draw_highlights(screen, state, row, line_index, gutter, text_width, on_cursor):
     line = state["lines"][line_index]
+    expanded = expand_tabs(line)
     spans = get_spans(state)
     line_spans = []
     if line_index < len(spans):
@@ -408,28 +411,27 @@ def draw_highlights(screen, state, row, line_index, gutter, text_width, on_curso
     left = state["left"]
     visible_end = left + text_width
     if len(line_spans) == 0:
-        visible = line[left:visible_end]
+        visible = expanded[left:visible_end]
         if on_cursor:
             safe_addstr(screen, row, gutter, visible, attr_current("text"))
         else:
             safe_addstr(screen, row, gutter, visible, attr("text"))
     else:
         for span in line_spans:
-            start = span[0]
-            length = span[1]
+            start = display_column(line, span[0])
+            end = display_column(line, span[0] + span[1])
             color = span[2]
-            span_end = start + length
-            if span_end <= left:
+            if end <= left:
                 continue
             if start >= visible_end:
                 continue
             take_start = start
             if take_start < left:
                 take_start = left
-            take_end = span_end
+            take_end = end
             if take_end > visible_end:
                 take_end = visible_end
-            piece = line[take_start:take_end]
+            piece = expanded[take_start:take_end]
             column = gutter + (take_start - left)
             if on_cursor:
                 safe_addstr(screen, row, column, piece, attr_current(color))
@@ -442,14 +444,15 @@ def draw_matches(screen, state, row, line_index, gutter, text_width):
     matches = state["matches"]
     if len(matches) == 0:
         return
+    line = state["lines"][line_index]
+    expanded = expand_tabs(line)
     left = state["left"]
     visible_end = left + text_width
     for match in matches:
         if match[0] != line_index:
             continue
-        start = match[1]
-        length = match[2]
-        end = start + length
+        start = display_column(line, match[1])
+        end = display_column(line, match[1] + match[2])
         if end <= left:
             continue
         if start >= visible_end:
@@ -461,9 +464,9 @@ def draw_matches(screen, state, row, line_index, gutter, text_width):
         if take_end > visible_end:
             take_end = visible_end
         color = "match"
-        if line_index == state["cy"] and state["cx"] >= start and state["cx"] < end:
+        if line_index == state["cy"] and state["cx"] >= match[1] and state["cx"] < match[1] + match[2]:
             color = "match_current"
-        piece = state["lines"][line_index][take_start:take_end]
+        piece = expanded[take_start:take_end]
         column = gutter + (take_start - left)
         safe_addstr(screen, row, column, piece, attr(color))
 
@@ -553,7 +556,8 @@ def draw_status_bar(screen, state, height, width):
     if dot != "":
         dot_column = column + len(base) + 1
         safe_addstr(screen, row, dot_column, dot, attr("status_modified"))
-    right = str(state["cy"] + 1) + "," + str(state["cx"] + 1)
+    cursor_column = display_column(state["lines"][state["cy"]], state["cx"]) + 1
+    right = str(state["cy"] + 1) + "," + str(cursor_column)
     right_column = width - len(right) - 2
     left_limit = column + len(base) + 1
     marker_column = right_column
@@ -577,7 +581,8 @@ def place_cursor(screen, state, height, width):
         column = len(PROMPT_PREFIX) + len(prompt["question"]) + len(prompt["input"])
     else:
         row = state["cy"] - state["top"]
-        column = gutter_width(state) + state["cx"] - state["left"]
+        line = state["lines"][state["cy"]]
+        column = gutter_width(state) + display_column(line, state["cx"]) - state["left"]
     if row < 0:
         row = 0
     if row >= height:

@@ -4,8 +4,8 @@ import curses
 from grass.highlight import language_name
 from grass.screen import apply_window_title, draw, setup_screen
 from grass.search import find_next, first_match_index, index_at_cursor, update_matches
+from grass.tabs import TAB_WIDTH, char_index_at_column, display_column
 
-TAB_WIDTH = 4
 MAX_UNDO = 200
 MAX_FINDER_FILES = 5000
 FINDER_SKIP_DIRS = ("__pycache__", "node_modules", "venv", "env", "dist", "build")
@@ -110,19 +110,30 @@ def insert_text(state, text):
 
 
 def insert_tab(state):
-    insert_text(state, " " * TAB_WIDTH)
+    line = state["lines"][state["cy"]]
+    indent = leading_indent(line)
+    if indent.startswith("\t"):
+        insert_text(state, "\t")
+        return
+    column = display_column(line, state["cx"])
+    spaces = TAB_WIDTH - (column % TAB_WIDTH)
+    insert_text(state, " " * spaces)
 
 
-def leading_spaces(text):
+def leading_indent(text):
     result = ""
     for character in text:
-        if character == " ":
+        if character == " " or character == "\t":
             result = result + character
-        elif character == "\t":
-            result = result + " " * TAB_WIDTH
         else:
             break
     return result
+
+
+def indent_unit(indent):
+    if "\t" in indent:
+        return "\t"
+    return " " * TAB_WIDTH
 
 
 def insert_newline(state):
@@ -130,9 +141,9 @@ def insert_newline(state):
     line = state["lines"][state["cy"]]
     before = line[:state["cx"]]
     after = line[state["cx"]:]
-    indent = leading_spaces(line)
+    indent = leading_indent(line)
     if before.rstrip().endswith(":"):
-        indent = indent + " " * TAB_WIDTH
+        indent = indent + indent_unit(indent)
     state["lines"][state["cy"]] = before
     state["lines"].insert(state["cy"] + 1, indent + after)
     state["cy"] = state["cy"] + 1
@@ -222,16 +233,20 @@ def move_right(state):
         state["cx"] = 0
 
 
+def move_to_line(state, line_index):
+    target = display_column(state["lines"][state["cy"]], state["cx"])
+    state["cy"] = line_index
+    state["cx"] = char_index_at_column(state["lines"][line_index], target)
+
+
 def move_up(state):
     if state["cy"] > 0:
-        state["cy"] = state["cy"] - 1
-        clamp_column(state)
+        move_to_line(state, state["cy"] - 1)
 
 
 def move_down(state):
     if state["cy"] < len(state["lines"]) - 1:
-        state["cy"] = state["cy"] + 1
-        clamp_column(state)
+        move_to_line(state, state["cy"] + 1)
 
 
 def move_home(state):
@@ -250,18 +265,18 @@ def view_rows():
 
 
 def page_up(state):
-    state["cy"] = state["cy"] - view_rows()
-    if state["cy"] < 0:
-        state["cy"] = 0
-    clamp_column(state)
+    line_index = state["cy"] - view_rows()
+    if line_index < 0:
+        line_index = 0
+    move_to_line(state, line_index)
 
 
 def page_down(state):
-    state["cy"] = state["cy"] + view_rows()
+    line_index = state["cy"] + view_rows()
     last = len(state["lines"]) - 1
-    if state["cy"] > last:
-        state["cy"] = last
-    clamp_column(state)
+    if line_index > last:
+        line_index = last
+    move_to_line(state, line_index)
 
 
 def folder_exists(path):
@@ -275,10 +290,7 @@ def split_lines(text):
     lines = text.splitlines()
     if len(lines) == 0:
         lines = [""]
-    clean = []
-    for line in lines:
-        clean.append(line.replace("\t", " " * TAB_WIDTH))
-    return clean
+    return lines
 
 
 def reset_buffer(state):

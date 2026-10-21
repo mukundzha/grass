@@ -71,7 +71,7 @@ basic colors fall back gracefully.
 | type | edit |
 | arrows, Home, End, PageUp, PageDown | move |
 | Enter | new line, with auto-indent |
-| Tab | insert 4 spaces |
+| Tab | indent to the next tab stop |
 | Backspace, Delete | delete |
 | Ctrl-F | find (jumps to matches as you type) |
 | Ctrl-P | open a file by fuzzy search |
@@ -87,6 +87,6 @@ basic colors fall back gracefully.
 - Grass is always in typing mode, like nano.
 - A file without a trailing newline stays that way, and the status bar says `no newline`.
 - The theme is designed for dark terminal backgrounds.
-- Tabs in opened files are converted to 4 spaces.
+- Tabs are preserved and shown at 4-column tab stops.
 - Large files re-highlight fully on every edit; normal files stay fast.
 - Wide characters (CJK) and long wrapped lines are not fully supported yet.

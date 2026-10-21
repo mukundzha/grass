@@ -4,7 +4,20 @@ A minimal, beautiful, zero-config terminal code editor.
 
 No modes. No config files. Just type.
 
+[![tests](https://github.com/mukundzha/grass/actions/workflows/tests.yml/badge.svg)](https://github.com/mukundzha/grass/actions/workflows/tests.yml)
+
 ![Grass demo](https://raw.githubusercontent.com/mukundzha/grass/main/docs/demo.gif)
+
+## Why
+
+Terminal editors tend to be either tiny and utilitarian (nano) or powerful
+and config-heavy (Vim, Helix). Grass is the space between: a minimal editor
+that is pleasant to look at, starts instantly, and stays small enough to
+understand and change in an afternoon.
+
+It is deliberately not a Vim replacement. There are no plugins, LSP, mouse
+support, or config files. One theme, one mode, and under 2,000 lines of
+Python, with Pygments for highlighting.
 
 ## Install
 
@@ -81,6 +94,19 @@ basic colors fall back gracefully.
 | Ctrl-Z | undo |
 | Ctrl-R | redo |
 | Ctrl-Q | quit |
+
+## Development
+
+Grass is plain Python with no build step.
+
+```bash
+git clone https://github.com/mukundzha/grass.git
+cd grass
+pip install -e .
+python tests/run_tests.py
+```
+
+Tests are plain functions run by a small custom runner.
 
 ## Notes
 

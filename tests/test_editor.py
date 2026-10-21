@@ -123,6 +123,61 @@ def test_redo_reapplies_text():
     assert state["lines"] == ["hello"]
 
 
+def test_typing_groups_into_one_undo():
+    state = editor.plain_state()
+    editor.handle_key(state, "a")
+    editor.handle_key(state, "b")
+    editor.handle_key(state, "c")
+    editor.undo(state)
+    assert state["lines"] == [""]
+
+
+def test_pause_starts_new_undo_step():
+    state = editor.plain_state()
+    editor.handle_key(state, "a")
+    editor.handle_key(state, "b")
+    state["undo_time"] = 0
+    editor.handle_key(state, "c")
+    editor.undo(state)
+    assert state["lines"] == ["ab"]
+    editor.undo(state)
+    assert state["lines"] == [""]
+
+
+def test_cursor_move_starts_new_undo_step():
+    state = editor.plain_state()
+    editor.handle_key(state, "a")
+    editor.handle_key(state, "b")
+    editor.move_left(state)
+    editor.handle_key(state, "X")
+    editor.undo(state)
+    assert state["lines"] == ["ab"]
+    editor.undo(state)
+    assert state["lines"] == [""]
+
+
+def test_backspace_groups_into_one_undo():
+    state = editor.plain_state()
+    editor.insert_text(state, "hello")
+    editor.backspace(state)
+    editor.backspace(state)
+    editor.backspace(state)
+    editor.undo(state)
+    assert state["lines"] == ["hello"]
+    editor.undo(state)
+    assert state["lines"] == [""]
+
+
+def test_typing_after_undo_is_undoable():
+    state = editor.plain_state()
+    editor.handle_key(state, "a")
+    editor.handle_key(state, "b")
+    editor.undo(state)
+    editor.handle_key(state, "c")
+    editor.undo(state)
+    assert state["lines"] == [""]
+
+
 def test_move_down_clamps_column():
     state = editor.plain_state()
     editor.insert_text(state, "long line")
@@ -290,7 +345,7 @@ def test_undo_key_restores_text():
     editor.handle_key(state, "b")
     editor.handle_key(state, "c")
     editor.handle_key(state, "\x1a")
-    assert state["lines"] == ["ab"]
+    assert state["lines"] == [""]
 
 
 def test_quit_immediately_when_clean():

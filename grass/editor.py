@@ -1,4 +1,5 @@
 import os
+import time
 import curses
 
 from grass.highlight import language_name
@@ -7,6 +8,7 @@ from grass.search import find_next, first_match_index, index_at_cursor, update_m
 from grass.tabs import TAB_WIDTH, char_index_at_column, display_column
 
 MAX_UNDO = 200
+UNDO_GROUP_SECONDS = 0.8
 MAX_FINDER_FILES = 5000
 FINDER_SKIP_DIRS = ("__pycache__", "node_modules", "venv", "env", "dist", "build")
 PROJECT_MARKERS = (".git", "pyproject.toml", "setup.py", "setup.cfg", "package.json", "Cargo.toml", "go.mod", "Makefile")
@@ -28,6 +30,8 @@ def plain_state():
         "final_newline": False,
         "undo_stack": [],
         "redo_stack": [],
+        "undo_kind": None,
+        "undo_time": 0.0,
         "version": 0,
         "spans": [],
         "spans_version": -1,
@@ -60,14 +64,30 @@ def update_modified(state):
         state["modified"] = True
 
 
-def push_undo(state):
+def mark_changed(state):
+    state["redo_stack"] = []
+    state["modified"] = True
+    state["version"] = state["version"] + 1
+
+
+def break_undo_group(state):
+    state["undo_kind"] = None
+    state["undo_time"] = 0.0
+
+
+def push_undo(state, kind=None):
+    now = time.monotonic()
+    if kind is not None and kind == state["undo_kind"] and now - state["undo_time"] <= UNDO_GROUP_SECONDS:
+        mark_changed(state)
+        state["undo_time"] = now
+        return
     record = (list(state["lines"]), state["cx"], state["cy"])
     state["undo_stack"].append(record)
     if len(state["undo_stack"]) > MAX_UNDO:
         state["undo_stack"].pop(0)
-    state["redo_stack"] = []
-    state["modified"] = True
-    state["version"] = state["version"] + 1
+    state["undo_kind"] = kind
+    state["undo_time"] = now
+    mark_changed(state)
 
 
 def undo(state):
@@ -82,6 +102,7 @@ def undo(state):
     state["cy"] = record[2]
     state["modified"] = True
     state["version"] = state["version"] + 1
+    break_undo_group(state)
     state["message"] = "Undo"
 
 
@@ -97,11 +118,12 @@ def redo(state):
     state["cy"] = record[2]
     state["modified"] = True
     state["version"] = state["version"] + 1
+    break_undo_group(state)
     state["message"] = "Redo"
 
 
 def insert_text(state, text):
-    push_undo(state)
+    push_undo(state, "insert")
     line = state["lines"][state["cy"]]
     before = line[:state["cx"]]
     after = line[state["cx"]:]
@@ -153,14 +175,14 @@ def insert_newline(state):
 def backspace(state):
     line = state["lines"][state["cy"]]
     if state["cx"] > 0:
-        push_undo(state)
+        push_undo(state, "backspace")
         before = line[:state["cx"] - 1]
         after = line[state["cx"]:]
         state["lines"][state["cy"]] = before + after
         state["cx"] = state["cx"] - 1
         return
     if state["cy"] > 0:
-        push_undo(state)
+        push_undo(state, "backspace")
         previous = state["lines"][state["cy"] - 1]
         state["lines"][state["cy"] - 1] = previous + line
         del state["lines"][state["cy"]]
@@ -171,13 +193,13 @@ def backspace(state):
 def delete_forward(state):
     line = state["lines"][state["cy"]]
     if state["cx"] < len(line):
-        push_undo(state)
+        push_undo(state, "delete")
         before = line[:state["cx"]]
         after = line[state["cx"] + 1:]
         state["lines"][state["cy"]] = before + after
         return
     if state["cy"] < len(state["lines"]) - 1:
-        push_undo(state)
+        push_undo(state, "delete")
         next_line = state["lines"][state["cy"] + 1]
         state["lines"][state["cy"]] = line + next_line
         del state["lines"][state["cy"] + 1]
@@ -215,6 +237,7 @@ def clamp_column(state):
 
 
 def move_left(state):
+    break_undo_group(state)
     if state["cx"] > 0:
         state["cx"] = state["cx"] - 1
         return
@@ -224,6 +247,7 @@ def move_left(state):
 
 
 def move_right(state):
+    break_undo_group(state)
     line = state["lines"][state["cy"]]
     if state["cx"] < len(line):
         state["cx"] = state["cx"] + 1
@@ -240,20 +264,24 @@ def move_to_line(state, line_index):
 
 
 def move_up(state):
+    break_undo_group(state)
     if state["cy"] > 0:
         move_to_line(state, state["cy"] - 1)
 
 
 def move_down(state):
+    break_undo_group(state)
     if state["cy"] < len(state["lines"]) - 1:
         move_to_line(state, state["cy"] + 1)
 
 
 def move_home(state):
+    break_undo_group(state)
     state["cx"] = 0
 
 
 def move_end(state):
+    break_undo_group(state)
     state["cx"] = len(state["lines"][state["cy"]])
 
 
@@ -265,6 +293,7 @@ def view_rows():
 
 
 def page_up(state):
+    break_undo_group(state)
     line_index = state["cy"] - view_rows()
     if line_index < 0:
         line_index = 0
@@ -272,6 +301,7 @@ def page_up(state):
 
 
 def page_down(state):
+    break_undo_group(state)
     line_index = state["cy"] + view_rows()
     last = len(state["lines"]) - 1
     if line_index > last:
@@ -304,6 +334,7 @@ def reset_buffer(state):
     state["saved_text"] = ""
     state["undo_stack"] = []
     state["redo_stack"] = []
+    break_undo_group(state)
     state["version"] = state["version"] + 1
 
 
@@ -358,6 +389,7 @@ def save_file(state):
 
 
 def start_open_prompt(state):
+    break_undo_group(state)
     state["prompt"] = {
         "kind": "open",
         "question": "Open: ",
@@ -441,6 +473,7 @@ def refresh_finder(state):
 
 
 def start_finder(state):
+    break_undo_group(state)
     path = state["path"]
     if path is None:
         base = os.getcwd()
@@ -482,6 +515,7 @@ def finish_finder(state):
 
 
 def start_save_as_prompt(state, then_quit):
+    break_undo_group(state)
     guessed = state["path"]
     if guessed is None:
         guessed = ""
@@ -548,6 +582,7 @@ def finish_save_as(state):
 
 
 def start_search_prompt(state):
+    break_undo_group(state)
     state["prompt"] = {
         "kind": "search",
         "question": "Find: ",
@@ -604,6 +639,7 @@ def finish_search(state):
 
 
 def search_again(state):
+    break_undo_group(state)
     if state["search_term"] == "":
         start_search_prompt(state)
         return

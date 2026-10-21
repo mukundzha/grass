@@ -4,10 +4,12 @@ A minimal, beautiful, zero-config terminal code editor.
 
 No modes. No config files. Just type.
 
+![Grass demo](docs/demo.gif)
+
 ## Install
 
 ```bash
-pip install -e .
+pip install grass-editor
 ```
 
 On Windows, install curses support first:

@@ -7,7 +7,7 @@ No modes. No config files. Just type.
 [![tests](https://github.com/mukundzha/grass/actions/workflows/tests.yml/badge.svg)](https://github.com/mukundzha/grass/actions/workflows/tests.yml)
 [![PyPI](https://img.shields.io/pypi/v/grass-editor.svg)](https://pypi.org/project/grass-editor/)
 
-![Grass demo](https://raw.githubusercontent.com/mukundzha/grass/main/docs/demo.gif?v=2)
+![Grass demo](https://raw.githubusercontent.com/mukundzha/grass/17b0c4e/docs/demo.gif)
 
 ## Why
 

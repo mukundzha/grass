@@ -115,3 +115,14 @@ def test_message_color_for_success():
 
 def test_message_color_for_plain_message():
     assert screen.message_color("Cut line") == "message"
+
+
+def test_missing_newline_flag():
+    state = {"lines": ["x"], "final_newline": False}
+    assert screen.missing_newline(state) is True
+    state["final_newline"] = True
+    assert screen.missing_newline(state) is False
+    state = {"lines": [""], "final_newline": False}
+    assert screen.missing_newline(state) is False
+    state = {"lines": ["x", ""], "final_newline": False}
+    assert screen.missing_newline(state) is False

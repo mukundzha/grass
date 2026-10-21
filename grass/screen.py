@@ -514,6 +514,14 @@ def status_dot(state):
     return ""
 
 
+def missing_newline(state):
+    if state["final_newline"]:
+        return False
+    if state["lines"][-1] == "":
+        return False
+    return True
+
+
 def draw_status_bar(screen, state, height, width):
     row = height - 1
     fill_row(screen, row, width - 1, "status")
@@ -530,6 +538,11 @@ def draw_status_bar(screen, state, height, width):
     right = str(state["cy"] + 1) + "," + str(state["cx"] + 1)
     right_column = width - len(right) - 2
     safe_addstr(screen, row, right_column, right, attr("status_dim"))
+    if missing_newline(state):
+        marker = "no newline"
+        marker_column = right_column - len(marker) - 2
+        if marker_column > column + len(base) + 1:
+            safe_addstr(screen, row, marker_column, marker, attr("status_dim"))
 
 
 def place_cursor(screen, state, height, width):

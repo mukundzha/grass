@@ -25,6 +25,7 @@ def plain_state():
         "message": "",
         "prompt": None,
         "saved_text": "",
+        "final_newline": False,
         "undo_stack": [],
         "redo_stack": [],
         "version": 0,
@@ -46,7 +47,10 @@ def plain_state():
 
 
 def current_text(state):
-    return "\n".join(state["lines"])
+    text = "\n".join(state["lines"])
+    if state["final_newline"]:
+        text = text + "\n"
+    return text
 
 
 def update_modified(state):
@@ -279,6 +283,7 @@ def split_lines(text):
 
 def reset_buffer(state):
     state["lines"] = [""]
+    state["final_newline"] = False
     state["cx"] = 0
     state["cy"] = 0
     state["top"] = 0
@@ -307,6 +312,7 @@ def load_file(state, path):
             return
         reset_buffer(state)
         state["lines"] = split_lines(text)
+        state["final_newline"] = text.endswith("\n")
         state["saved_text"] = current_text(state)
         state["path"] = path
         state["language"] = language_name(path)
@@ -326,9 +332,7 @@ def save_file(state):
     if not folder_exists(path):
         state["message"] = "Cannot save: folder does not exist"
         return
-    text = "\n".join(state["lines"])
-    if len(state["lines"]) > 1 or state["lines"][0] != "":
-        text = text + "\n"
+    text = current_text(state)
     try:
         handle = open(path, "w", encoding="utf-8")
         handle.write(text)

@@ -109,6 +109,67 @@ def test_split_lines():
     assert lines == ["a    b"]
 
 
+def test_load_and_save_keep_missing_final_newline():
+    root = tempfile.mkdtemp()
+    try:
+        path = os.path.join(root, "plain.txt")
+        handle = open(path, "w")
+        handle.write("one\ntwo")
+        handle.close()
+        state = editor.plain_state()
+        editor.load_file(state, path)
+        assert state["lines"] == ["one", "two"]
+        assert state["final_newline"] is False
+        assert state["modified"] is False
+        state["cy"] = 1
+        state["cx"] = 3
+        editor.insert_text(state, "!")
+        editor.save_file(state)
+        handle = open(path, "r")
+        text = handle.read()
+        handle.close()
+        assert text == "one\ntwo!"
+    finally:
+        shutil.rmtree(root)
+
+
+def test_load_and_save_keep_final_newline():
+    root = tempfile.mkdtemp()
+    try:
+        path = os.path.join(root, "plain.txt")
+        handle = open(path, "w")
+        handle.write("one\ntwo\n")
+        handle.close()
+        state = editor.plain_state()
+        editor.load_file(state, path)
+        assert state["final_newline"] is True
+        editor.save_file(state)
+        handle = open(path, "r")
+        text = handle.read()
+        handle.close()
+        assert text == "one\ntwo\n"
+    finally:
+        shutil.rmtree(root)
+
+
+def test_empty_file_roundtrip():
+    root = tempfile.mkdtemp()
+    try:
+        path = os.path.join(root, "empty.txt")
+        handle = open(path, "w")
+        handle.close()
+        state = editor.plain_state()
+        editor.load_file(state, path)
+        assert state["final_newline"] is False
+        editor.save_file(state)
+        handle = open(path, "r")
+        text = handle.read()
+        handle.close()
+        assert text == ""
+    finally:
+        shutil.rmtree(root)
+
+
 def test_quit_prompt_when_modified():
     state = editor.plain_state()
     state["path"] = "example.py"

@@ -83,6 +83,7 @@ basic colors fall back gracefully.
 ## Notes
 
 - Grass is always in typing mode, like nano.
+- A file without a trailing newline stays that way, and the status bar says `no newline`.
 - The theme is designed for dark terminal backgrounds.
 - Tabs in opened files are converted to 4 spaces.
 - Large files re-highlight fully on every edit; normal files stay fast.

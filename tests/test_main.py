@@ -1,6 +1,7 @@
 import io
 import sys
 
+from grass import VERSION
 from grass import main as main_module
 
 
@@ -20,7 +21,7 @@ def run_version_flag():
 
 def test_version_flag_prints_name_and_version():
     text = run_version_flag()
-    assert "grass 0.1.0" in text
+    assert "grass " + VERSION in text
 
 
 def test_version_flag_mentions_theme():

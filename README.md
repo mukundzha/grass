@@ -4,7 +4,7 @@ A minimal, beautiful, zero-config terminal code editor.
 
 No modes. No config files. Just type.
 
-![Grass demo](docs/demo.gif)
+![Grass demo](https://raw.githubusercontent.com/mukundzha/grass/main/docs/demo.gif)
 
 ## Install
 
@@ -47,7 +47,7 @@ green-gray so code reads like a clearing at dusk.
 
 - A two-tone wordmark splash greets you on launch — meadow green above,
   sage shadow below — over the line `❧ a calm terminal editor`, signed
-  `v0.1.0 · Meadow`, and fades the moment you type.
+  `v0.1.1 · Meadow`, and fades the moment you type.
 - The status bar keeps the file name on the left and live line,column
   position on the right.
 - An amber dot beside the file name marks unsaved changes, then

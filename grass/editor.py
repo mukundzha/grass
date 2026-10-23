@@ -358,7 +358,7 @@ def load_file(state, path):
         state["final_newline"] = text.endswith("\n")
         state["saved_text"] = current_text(state)
         state["path"] = path
-        state["language"] = language_name(path)
+        state["language"] = language_name(path, text)
         state["message"] = "Opened " + path
         return
     reset_buffer(state)
@@ -575,7 +575,8 @@ def finish_save_as(state):
         state["message"] = "Cannot save: folder does not exist"
         return
     state["path"] = path
-    state["language"] = language_name(path)
+    state["language"] = language_name(path, current_text(state))
+    state["spans_version"] = -1
     save_file(state)
     if prompt["then_quit"] and not state["modified"]:
         state["quit"] = True

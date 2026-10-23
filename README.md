@@ -77,6 +77,8 @@ status bar. It assumes a dark 256-color terminal; basic colors fall back.
 - Tabs are preserved and shown at 4-column stops.
 - A file without a trailing newline stays that way. The status bar says `no newline`.
 - Large files re-highlight fully on every edit. Normal files stay fast.
+- Highlighting covers C, C++, Perl, JavaScript, TypeScript, Go, Rust, Ruby,
+  Java, shell, HTML, CSS, JSON, YAML, Markdown, and other Pygments languages.
 - Wide characters (CJK) and long wrapped lines are not fully supported yet.
 
 ## Development

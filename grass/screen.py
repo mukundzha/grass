@@ -3,7 +3,7 @@ import os
 import sys
 
 from grass import VERSION
-from grass.highlight import get_spans
+from grass.highlight import cached_spans
 from grass.search import index_at_cursor, update_matches
 from grass.tabs import display_column, expand_tabs
 
@@ -404,7 +404,7 @@ def draw_text_row(screen, state, row, line_index, gutter, text_width, width):
 def draw_highlights(screen, state, row, line_index, gutter, text_width, on_cursor):
     line = state["lines"][line_index]
     expanded = expand_tabs(line)
-    spans = get_spans(state)
+    spans = cached_spans(state)
     line_spans = []
     if line_index < len(spans):
         line_spans = spans[line_index]

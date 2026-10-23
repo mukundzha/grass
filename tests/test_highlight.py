@@ -214,3 +214,63 @@ def test_exception_color():
 
 def test_namespace_color():
     assert highlight.color_for_token(Token.Name.Namespace) == "classname"
+
+
+def test_pick_lexer_is_cached():
+    first = highlight.pick_lexer("example.py")
+    second = highlight.pick_lexer("example.py")
+    assert first is second
+
+
+def test_cached_spans_hides_stale_highlighting():
+    state = {"spans": [[(0, 1, "keyword")]], "spans_version": 1, "version": 2}
+    assert highlight.cached_spans(state) == []
+
+
+def test_cached_spans_returns_current_highlighting():
+    spans = [[(0, 1, "keyword")]]
+    state = {"spans": spans, "spans_version": 2, "version": 2}
+    assert highlight.cached_spans(state) == spans
+
+
+def test_get_spans_only_fills_requested_window():
+    state = {
+        "lines": ["x = 1", "if x:", "y = 2", "z = 3"],
+        "path": "example.py",
+        "version": 1,
+        "spans": [],
+        "spans_version": -1,
+        "spans_top": -1,
+        "spans_bottom": 0,
+        "top": 0,
+    }
+    spans = highlight.get_spans(state, 1, 3)
+    assert len(spans) == 4
+    assert state["spans_top"] == 1
+    assert state["spans_bottom"] == 3
+    assert spans[0] == []
+    assert len(spans[1]) > 0
+
+
+def test_spans_cover_handles_short_files():
+    state = {
+        "lines": [""],
+        "version": 1,
+        "spans_version": 1,
+        "top": 0,
+        "spans_top": 0,
+        "spans_bottom": 1,
+    }
+    assert highlight.spans_cover(state, 38) is True
+
+
+def test_spans_cover_rejects_scrolled_view():
+    state = {
+        "lines": ["a", "b", "c", "d"],
+        "version": 1,
+        "spans_version": 1,
+        "top": 2,
+        "spans_top": 0,
+        "spans_bottom": 2,
+    }
+    assert highlight.spans_cover(state, 2) is False

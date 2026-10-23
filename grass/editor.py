@@ -2,13 +2,15 @@ import os
 import time
 import curses
 
-from grass.highlight import language_name
+from grass.highlight import get_spans, language_name, spans_cover
 from grass.screen import apply_window_title, draw, setup_screen
 from grass.search import find_next, first_match_index, index_at_cursor, update_matches
 from grass.tabs import TAB_WIDTH, char_index_at_column, display_column
 
 MAX_UNDO = 200
 UNDO_GROUP_SECONDS = 0.8
+HIGHLIGHT_DELAY = 0.12
+HIGHLIGHT_CONTEXT = 20
 MAX_FINDER_FILES = 5000
 FINDER_SKIP_DIRS = ("__pycache__", "node_modules", "venv", "env", "dist", "build")
 PROJECT_MARKERS = (".git", "pyproject.toml", "setup.py", "setup.cfg", "package.json", "Cargo.toml", "go.mod", "Makefile")
@@ -35,6 +37,9 @@ def plain_state():
         "version": 0,
         "spans": [],
         "spans_version": -1,
+        "spans_top": -1,
+        "spans_bottom": 0,
+        "highlight_due": 0.0,
         "search_term": "",
         "matches": [],
         "search_version": -1,
@@ -64,10 +69,30 @@ def update_modified(state):
         state["modified"] = True
 
 
+def schedule_highlight(state):
+    state["highlight_due"] = time.monotonic() + HIGHLIGHT_DELAY
+
+
+def highlight_ready(state):
+    if state["highlight_due"] <= 0:
+        return False
+    return time.monotonic() >= state["highlight_due"]
+
+
+def highlight_timeout(state):
+    if state["highlight_due"] <= 0:
+        return -1
+    remaining = state["highlight_due"] - time.monotonic()
+    if remaining <= 0:
+        return 0
+    return int(remaining * 1000) + 1
+
+
 def mark_changed(state):
     state["redo_stack"] = []
     state["modified"] = True
     state["version"] = state["version"] + 1
+    schedule_highlight(state)
 
 
 def break_undo_group(state):
@@ -102,6 +127,7 @@ def undo(state):
     state["cy"] = record[2]
     state["modified"] = True
     state["version"] = state["version"] + 1
+    schedule_highlight(state)
     break_undo_group(state)
     state["message"] = "Undo"
 
@@ -118,6 +144,7 @@ def redo(state):
     state["cy"] = record[2]
     state["modified"] = True
     state["version"] = state["version"] + 1
+    schedule_highlight(state)
     break_undo_group(state)
     state["message"] = "Redo"
 
@@ -336,6 +363,7 @@ def reset_buffer(state):
     state["redo_stack"] = []
     break_undo_group(state)
     state["version"] = state["version"] + 1
+    schedule_highlight(state)
 
 
 def load_file(state, path):
@@ -577,6 +605,7 @@ def finish_save_as(state):
     state["path"] = path
     state["language"] = language_name(path, current_text(state))
     state["spans_version"] = -1
+    schedule_highlight(state)
     save_file(state)
     if prompt["then_quit"] and not state["modified"]:
         state["quit"] = True
@@ -876,11 +905,30 @@ def run(screen, path):
         load_file(state, path)
     while not state["quit"]:
         apply_window_title(state)
+        height, width = screen.getmaxyx()
+        view_rows = height - 2
+        if highlight_ready(state):
+            first_line = state["top"] - HIGHLIGHT_CONTEXT
+            if first_line < 0:
+                first_line = 0
+            last_line = state["top"] + view_rows + HIGHLIGHT_CONTEXT
+            if last_line > len(state["lines"]):
+                last_line = len(state["lines"])
+            get_spans(state, first_line, last_line)
+            state["highlight_due"] = 0.0
         draw(screen, state)
-        if state["escape"] is None:
-            screen.timeout(-1)
-        else:
-            screen.timeout(25)
+        height, width = screen.getmaxyx()
+        view_rows = height - 2
+        if state["path"] is not None or state["lines"] != [""]:
+            if not spans_cover(state, view_rows) and state["highlight_due"] <= 0:
+                schedule_highlight(state)
+        timeout = -1
+        if state["escape"] is not None:
+            timeout = 25
+        delay = highlight_timeout(state)
+        if delay >= 0 and (timeout == -1 or delay < timeout):
+            timeout = delay
+        screen.timeout(timeout)
         try:
             key = screen.get_wch()
         except curses.error:

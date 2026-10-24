@@ -6,6 +6,10 @@ from grass import editor
 from grass.tabs import expand_tabs
 
 
+def fail_replace(source, target):
+    raise OSError("replace failed")
+
+
 def test_insert_text():
     state = editor.plain_state()
     editor.insert_text(state, "hi")
@@ -298,6 +302,69 @@ def test_empty_file_roundtrip():
         text = handle.read()
         handle.close()
         assert text == ""
+    finally:
+        shutil.rmtree(root)
+
+
+def test_save_keeps_original_when_replace_fails():
+    root = tempfile.mkdtemp()
+    try:
+        path = os.path.join(root, "notes.txt")
+        handle = open(path, "w")
+        handle.write("old")
+        handle.close()
+        state = editor.plain_state()
+        editor.load_file(state, path)
+        state["lines"] = ["new"]
+        original = editor.os.replace
+        editor.os.replace = fail_replace
+        try:
+            editor.save_file(state)
+        finally:
+            editor.os.replace = original
+        assert state["message"] == "Cannot save: replace failed"
+        handle = open(path, "r")
+        text = handle.read()
+        handle.close()
+        assert text == "old"
+        assert os.listdir(root) == ["notes.txt"]
+    finally:
+        shutil.rmtree(root)
+
+
+def test_save_preserves_file_permissions():
+    root = tempfile.mkdtemp()
+    try:
+        path = os.path.join(root, "notes.txt")
+        handle = open(path, "w")
+        handle.write("old")
+        handle.close()
+        os.chmod(path, 0o640)
+        state = editor.plain_state()
+        editor.load_file(state, path)
+        state["lines"] = ["new"]
+        editor.save_file(state)
+        assert os.stat(path).st_mode & 0o777 == 0o640
+    finally:
+        shutil.rmtree(root)
+
+
+def test_save_cleans_up_temp_file():
+    root = tempfile.mkdtemp()
+    try:
+        path = os.path.join(root, "notes.txt")
+        handle = open(path, "w")
+        handle.write("old")
+        handle.close()
+        state = editor.plain_state()
+        editor.load_file(state, path)
+        state["lines"] = ["new"]
+        editor.save_file(state)
+        assert os.listdir(root) == ["notes.txt"]
+        handle = open(path, "r")
+        text = handle.read()
+        handle.close()
+        assert text == "new"
     finally:
         shutil.rmtree(root)
 

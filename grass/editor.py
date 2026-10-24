@@ -1,4 +1,5 @@
 import os
+import tempfile
 import time
 import curses
 
@@ -395,6 +396,39 @@ def load_file(state, path):
     state["message"] = "New file: press Ctrl-S to save"
 
 
+def default_file_mode():
+    mask = os.umask(0)
+    os.umask(mask)
+    return 0o666 & ~mask
+
+
+def write_file_atomic(path, text):
+    path = os.path.realpath(path)
+    folder = os.path.dirname(path)
+    mode = None
+    if os.path.exists(path):
+        mode = os.stat(path).st_mode & 0o777
+    descriptor, temp_path = tempfile.mkstemp(prefix=".grass-", dir=folder)
+    try:
+        handle = os.fdopen(descriptor, "w", encoding="utf-8")
+        try:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        finally:
+            handle.close()
+        if mode is None:
+            mode = default_file_mode()
+        os.chmod(temp_path, mode)
+        os.replace(temp_path, path)
+    except OSError:
+        try:
+            os.unlink(temp_path)
+        except OSError:
+            pass
+        raise
+
+
 def save_file(state):
     path = state["path"]
     if path is None:
@@ -405,9 +439,7 @@ def save_file(state):
         return
     text = current_text(state)
     try:
-        handle = open(path, "w", encoding="utf-8")
-        handle.write(text)
-        handle.close()
+        write_file_atomic(path, text)
     except OSError as error:
         state["message"] = "Cannot save: " + str(error)
         return

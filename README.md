@@ -75,6 +75,7 @@ status bar. It assumes a dark 256-color terminal; basic colors fall back.
 ## Notes
 
 - Always in typing mode, like nano.
+- Saves are atomic: a crash cannot leave the original file truncated.
 - Tabs are preserved and shown at 4-column stops.
 - A file without a trailing newline stays that way. The status bar says `no newline`.
 - Highlighting is limited to the visible area and updates after a short pause, so typing stays fast in large files.

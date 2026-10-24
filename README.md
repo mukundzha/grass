@@ -62,7 +62,8 @@ status bar. It assumes a dark 256-color terminal; basic colors fall back.
 | Tab | indent to the next tab stop |
 | Backspace, Delete | delete |
 | Ctrl-F | find as you type |
-| Ctrl-H | replace all |
+| F3 | find next |
+| Ctrl-H | replace all (word, then replacement) |
 | Ctrl-P | fuzzy file finder |
 | Ctrl-O | open by path |
 | Ctrl-K | cut line |
@@ -70,7 +71,17 @@ status bar. It assumes a dark 256-color terminal; basic colors fall back.
 | Ctrl-S | save (asks for a name if new) |
 | Ctrl-Z | undo |
 | Ctrl-R | redo |
-| Ctrl-Q | quit |
+| Ctrl-Q, Ctrl-C | quit |
+
+| Prompt key | Action |
+| --- | --- |
+| Enter | confirm or move to the next step |
+| Esc | cancel, close, or clear search |
+| Up, Down | select a file finder result |
+| Y, N | save or discard at the quit prompt |
+
+The replace flow is: `Ctrl-H`, type the word, `Enter`, type the replacement,
+`Enter`. Every match is replaced.
 
 ## Notes
 

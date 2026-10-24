@@ -559,9 +559,6 @@ def quit_editor(state):
     if not state["modified"]:
         state["quit"] = True
         return
-    if state["path"] is None:
-        start_save_as_prompt(state, True)
-        return
     state["prompt"] = {
         "kind": "quit",
         "question": "Save changes before quitting? (y = save, n = discard) ",
@@ -688,6 +685,9 @@ def answer_yes(state, prompt):
     kind = prompt["kind"]
     state["prompt"] = None
     if kind == "quit":
+        if state["path"] is None:
+            start_save_as_prompt(state, True)
+            return
         save_file(state)
         if not state["modified"]:
             state["quit"] = True

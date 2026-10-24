@@ -354,13 +354,62 @@ def test_quit_immediately_when_clean():
     assert state["quit"] is True
 
 
-def test_quit_saves_untitled_via_save_as():
+def test_quit_untitled_prompts_before_saving():
     state = editor.plain_state()
     editor.insert_text(state, "x")
     editor.quit_editor(state)
     assert state["prompt"] is not None
+    assert state["prompt"]["kind"] == "quit"
+
+
+def test_quit_untitled_y_opens_save_as():
+    state = editor.plain_state()
+    editor.insert_text(state, "x")
+    editor.quit_editor(state)
+    editor.handle_key(state, "y")
+    assert state["prompt"] is not None
     assert state["prompt"]["kind"] == "save_as"
     assert state["prompt"]["then_quit"] is True
+
+
+def test_quit_untitled_n_discards_and_quits():
+    state = editor.plain_state()
+    editor.insert_text(state, "x")
+    editor.quit_editor(state)
+    editor.handle_key(state, "n")
+    assert state["quit"] is True
+
+
+def test_quit_untitled_save_as_cancel_keeps_editor_open():
+    state = editor.plain_state()
+    editor.insert_text(state, "x")
+    editor.quit_editor(state)
+    editor.handle_key(state, "y")
+    editor.finish_escape(state)
+    assert state["prompt"] is None
+    assert state["quit"] is False
+    assert state["modified"] is True
+
+
+def test_quit_untitled_y_saves_then_quits():
+    root = tempfile.mkdtemp()
+    try:
+        path = os.path.join(root, "notes.txt")
+        state = editor.plain_state()
+        editor.handle_key(state, "x")
+        editor.handle_key(state, "\x11")
+        assert state["prompt"]["kind"] == "quit"
+        editor.handle_key(state, "y")
+        assert state["prompt"]["kind"] == "save_as"
+        state["prompt"]["input"] = path
+        editor.finish_save_as(state)
+        assert state["quit"] is True
+        handle = open(path, "r")
+        text = handle.read()
+        handle.close()
+        assert text == "x"
+    finally:
+        shutil.rmtree(root)
 
 
 def test_save_untitled_opens_save_as_prompt():

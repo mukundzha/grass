@@ -605,6 +605,171 @@ def test_search_again_with_term_finds_next():
     assert state["cx"] == 0
 
 
+def test_ctrl_h_opens_replace_prompt():
+    state = editor.plain_state()
+    editor.handle_key(state, "\x08")
+    assert state["prompt"] is not None
+    assert state["prompt"]["kind"] == "replace"
+    assert state["prompt"]["question"] == "Replace: "
+
+
+def test_replace_prompt_prefilled_with_search_term():
+    state = editor.plain_state()
+    state["search_term"] = "foo"
+    editor.start_replace_prompt(state)
+    assert state["prompt"]["input"] == "foo"
+
+
+def test_replace_enter_switches_to_replacement_prompt():
+    state = editor.plain_state()
+    state["lines"] = ["foo foo"]
+    editor.handle_key(state, "\x08")
+    editor.handle_key(state, "f")
+    editor.handle_key(state, "o")
+    editor.handle_key(state, "o")
+    editor.handle_key(state, "\n")
+    assert state["prompt"]["kind"] == "replace_with"
+    assert state["prompt"]["question"] == "Replace with: "
+    assert state["prompt"]["find"] == "foo"
+    assert state["prompt"]["input"] == ""
+    assert state["cy"] == 0
+    assert state["cx"] == 0
+
+
+def test_replace_all_replaces_every_match():
+    state = editor.plain_state()
+    state["lines"] = ["foo foo", "foo"]
+    editor.handle_key(state, "\x08")
+    editor.handle_key(state, "f")
+    editor.handle_key(state, "o")
+    editor.handle_key(state, "o")
+    editor.handle_key(state, "\n")
+    editor.handle_key(state, "b")
+    editor.handle_key(state, "a")
+    editor.handle_key(state, "r")
+    editor.handle_key(state, "\n")
+    assert state["lines"] == ["bar bar", "bar"]
+    assert state["prompt"] is None
+    assert state["message"] == "Replaced 3 occurrences"
+    assert state["modified"] is True
+    assert state["cy"] == 0
+    assert state["cx"] == 0
+
+
+def test_replace_all_can_delete_text():
+    state = editor.plain_state()
+    state["lines"] = ["a-b-a"]
+    editor.handle_key(state, "\x08")
+    editor.handle_key(state, "a")
+    editor.handle_key(state, "\n")
+    editor.handle_key(state, "\n")
+    assert state["lines"] == ["-b-"]
+    assert state["message"] == "Replaced 2 occurrences"
+
+
+def test_replace_all_undo_restores_text():
+    state = editor.plain_state()
+    state["lines"] = ["foo foo"]
+    editor.handle_key(state, "\x08")
+    editor.handle_key(state, "f")
+    editor.handle_key(state, "o")
+    editor.handle_key(state, "o")
+    editor.handle_key(state, "\n")
+    editor.handle_key(state, "b")
+    editor.handle_key(state, "a")
+    editor.handle_key(state, "r")
+    editor.handle_key(state, "\n")
+    editor.undo(state)
+    assert state["lines"] == ["foo foo"]
+
+
+def test_replace_escape_restores_search_term_and_anchor():
+    state = editor.plain_state()
+    state["lines"] = ["foo foo", "other"]
+    state["search_term"] = "foo"
+    state["search_version"] = -1
+    state["cy"] = 1
+    state["cx"] = 3
+    editor.handle_key(state, "\x08")
+    editor.handle_key(state, "\n")
+    assert state["prompt"]["kind"] == "replace_with"
+    assert state["cy"] == 0
+    assert state["cx"] == 0
+    editor.finish_escape(state)
+    assert state["prompt"] is None
+    assert state["search_term"] == "foo"
+    assert state["cy"] == 1
+    assert state["cx"] == 3
+
+
+def test_replace_escape_restores_term_typed_in_first_prompt():
+    state = editor.plain_state()
+    state["lines"] = ["foo"]
+    state["search_term"] = "foo"
+    state["search_version"] = -1
+    editor.handle_key(state, "\x08")
+    editor.handle_key(state, "x")
+    assert state["search_term"] == "foox"
+    editor.finish_escape(state)
+    assert state["search_term"] == "foo"
+
+
+def test_replace_not_found_closes_prompt():
+    state = editor.plain_state()
+    state["lines"] = ["alpha"]
+    editor.handle_key(state, "\x08")
+    editor.handle_key(state, "z")
+    editor.handle_key(state, "z")
+    editor.handle_key(state, "z")
+    editor.handle_key(state, "\n")
+    assert state["prompt"] is None
+    assert state["message"] == "Not found: zzz"
+    assert state["lines"] == ["alpha"]
+
+
+def test_replace_empty_find_cancels():
+    state = editor.plain_state()
+    editor.handle_key(state, "\x08")
+    editor.handle_key(state, "\n")
+    assert state["prompt"] is None
+    assert state["message"] == "Nothing to replace"
+
+
+def test_replace_backspace_updates_find():
+    state = editor.plain_state()
+    state["lines"] = ["alpha", "beta"]
+    editor.handle_key(state, "\x08")
+    editor.handle_key(state, "a")
+    editor.handle_key(state, "l")
+    assert len(state["matches"]) == 1
+    editor.handle_key(state, 127)
+    assert state["prompt"]["input"] == "a"
+    assert len(state["matches"]) == 3
+
+
+def test_replace_with_backspace_edits_replacement():
+    state = editor.plain_state()
+    state["lines"] = ["foo"]
+    editor.handle_key(state, "\x08")
+    editor.handle_key(state, "f")
+    editor.handle_key(state, "o")
+    editor.handle_key(state, "o")
+    editor.handle_key(state, "\n")
+    editor.handle_key(state, "b")
+    editor.handle_key(state, 127)
+    assert state["prompt"]["kind"] == "replace_with"
+    assert state["prompt"]["input"] == ""
+
+
+def test_ctrl_r_redoes_text():
+    state = editor.plain_state()
+    editor.handle_key(state, "a")
+    editor.handle_key(state, "\x1a")
+    assert state["lines"] == [""]
+    editor.handle_key(state, "\x12")
+    assert state["lines"] == ["a"]
+
+
 def test_update_modified_clears_when_text_matches_saved():
     state = editor.plain_state()
     state["lines"] = ["["]

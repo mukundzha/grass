@@ -514,9 +514,15 @@ def draw_message_bar(screen, state, height, width):
 
 def search_progress(state):
     prompt = state["prompt"]
-    if prompt is None or prompt["kind"] != "search":
+    if prompt is None:
         return ""
-    if prompt["input"] == "":
+    kind = prompt["kind"]
+    term = None
+    if kind == "search" or kind == "replace":
+        term = prompt["input"]
+    if kind == "replace_with":
+        term = prompt["find"]
+    if term is None or term == "":
         return ""
     count = len(state["matches"])
     if count == 0:

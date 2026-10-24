@@ -128,6 +128,15 @@ def test_missing_newline_flag():
     assert screen.missing_newline(state) is False
 
 
+def test_search_progress_for_replace_prompts():
+    state = {"prompt": {"kind": "replace", "input": "foo"}, "matches": [(0, 0, 3)], "cy": 0, "cx": 0}
+    assert screen.search_progress(state) == "1 of 1"
+    state["prompt"] = {"kind": "replace_with", "input": "", "find": "foo"}
+    assert screen.search_progress(state) == "1 of 1"
+    state["matches"] = []
+    assert screen.search_progress(state) == "no matches"
+
+
 def test_search_progress_text():
     state = {"prompt": {"kind": "search", "input": "foo"}, "matches": [(0, 0, 3)], "cy": 0, "cx": 0}
     assert screen.search_progress(state) == "1 of 1"

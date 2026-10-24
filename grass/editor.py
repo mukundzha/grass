@@ -630,7 +630,9 @@ def restore_search(state, prompt):
 
 def update_search_prompt(state):
     prompt = state["prompt"]
-    if prompt is None or prompt["kind"] != "search":
+    if prompt is None:
+        return
+    if prompt["kind"] != "search" and prompt["kind"] != "replace":
         return
     state["search_term"] = prompt["input"]
     state["search_version"] = -1
@@ -645,6 +647,72 @@ def update_search_prompt(state):
     match = state["matches"][index]
     state["cy"] = match[0]
     state["cx"] = match[1]
+
+
+def start_replace_prompt(state):
+    break_undo_group(state)
+    state["prompt"] = {
+        "kind": "replace",
+        "question": "Replace: ",
+        "input": state["search_term"],
+        "original_term": state["search_term"],
+        "anchor_cy": state["cy"],
+        "anchor_cx": state["cx"],
+    }
+    update_search_prompt(state)
+
+
+def finish_replace(state):
+    prompt = state["prompt"]
+    find = prompt["input"].strip()
+    if find == "":
+        restore_search(state, prompt)
+        state["prompt"] = None
+        state["message"] = "Nothing to replace"
+        return
+    state["search_term"] = find
+    state["search_version"] = -1
+    update_matches(state)
+    if len(state["matches"]) == 0:
+        state["prompt"] = None
+        state["message"] = "Not found: " + find
+        return
+    state["prompt"] = {
+        "kind": "replace_with",
+        "question": "Replace with: ",
+        "input": "",
+        "find": find,
+        "original_term": prompt["original_term"],
+        "anchor_cy": prompt["anchor_cy"],
+        "anchor_cx": prompt["anchor_cx"],
+    }
+
+
+def finish_replace_with(state):
+    prompt = state["prompt"]
+    find = prompt["find"]
+    replacement = prompt["input"]
+    state["search_term"] = find
+    state["search_version"] = -1
+    update_matches(state)
+    matches = state["matches"]
+    if len(matches) == 0:
+        state["prompt"] = None
+        state["message"] = "Not found: " + find
+        return
+    push_undo(state)
+    new_lines = []
+    for line in state["lines"]:
+        new_lines.append(line.replace(find, replacement))
+    state["lines"] = new_lines
+    state["cy"] = matches[0][0]
+    state["cx"] = matches[0][1]
+    clamp_column(state)
+    state["search_version"] = -1
+    state["prompt"] = None
+    state["message"] = "Replaced " + str(len(matches)) + " occurrence"
+    if len(matches) != 1:
+        state["message"] = state["message"] + "s"
 
 
 def finish_search(state):
@@ -716,6 +784,12 @@ def finish_prompt(state):
     if kind == "search":
         finish_search(state)
         return
+    if kind == "replace":
+        finish_replace(state)
+        return
+    if kind == "replace_with":
+        finish_replace_with(state)
+        return
     if kind == "find_file":
         finish_finder(state)
 
@@ -729,7 +803,7 @@ def handle_prompt_control(state, prompt, key):
             finder_move(state, 1)
             return
     if key == 27:
-        if prompt["kind"] == "search":
+        if prompt["kind"] == "search" or prompt["kind"] == "replace" or prompt["kind"] == "replace_with":
             restore_search(state, prompt)
         state["prompt"] = None
         state["message"] = "Cancelled"
@@ -743,7 +817,7 @@ def handle_prompt_control(state, prompt, key):
             prompt["input"] = text[:-1]
             if prompt["kind"] == "find_file":
                 refresh_finder(state)
-            if prompt["kind"] == "search":
+            if prompt["kind"] == "search" or prompt["kind"] == "replace":
                 update_search_prompt(state)
 
 
@@ -763,9 +837,12 @@ def handle_prompt_key(state, key):
     if kind == "open" or kind == "save_as":
         prompt["input"] = prompt["input"] + key
         return
-    if kind == "search":
+    if kind == "search" or kind == "replace":
         prompt["input"] = prompt["input"] + key
         update_search_prompt(state)
+        return
+    if kind == "replace_with":
+        prompt["input"] = prompt["input"] + key
         return
     if kind == "find_file":
         prompt["input"] = prompt["input"] + key
@@ -782,7 +859,7 @@ def handle_prompt_key(state, key):
 HANDLERS = {
     3: quit_editor,
     6: start_search_prompt,
-    8: backspace,
+    8: start_replace_prompt,
     9: insert_tab,
     10: insert_newline,
     11: cut_line,
@@ -841,7 +918,7 @@ def finish_escape(state):
     state["escape"] = None
     prompt = state["prompt"]
     if prompt is not None:
-        if prompt["kind"] == "search":
+        if prompt["kind"] == "search" or prompt["kind"] == "replace" or prompt["kind"] == "replace_with":
             restore_search(state, prompt)
         state["prompt"] = None
         state["message"] = "Cancelled"

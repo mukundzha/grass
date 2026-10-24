@@ -62,6 +62,7 @@ status bar. It assumes a dark 256-color terminal; basic colors fall back.
 | Tab | indent to the next tab stop |
 | Backspace, Delete | delete |
 | Ctrl-F | find as you type |
+| Ctrl-H | replace all |
 | Ctrl-P | fuzzy file finder |
 | Ctrl-O | open by path |
 | Ctrl-K | cut line |

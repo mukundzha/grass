@@ -16,25 +16,11 @@
   <img alt="Grass demo" src="https://raw.githubusercontent.com/mukundzha/grass/main/docs/demo.gif" width="760">
 </p>
 
-### Try it in 10 seconds. Nothing to install.
-
-```bash
-pipx run --spec grass-editor grass hello.py
-```
-
-### Keep it
+### Install
 
 ```bash
 pipx install grass-editor
 ```
-
-Then open a file:
-
-```bash
-grass hello.py
-```
-
-No file? Grass opens a read-only splash. Press `Ctrl-O` to open a path or `Ctrl-P` to pick a file.
 
 <sub>No pipx? `pip install grass-editor` works too. Python 3.9+. <a href="#windows">Windows notes</a>.</sub>
 

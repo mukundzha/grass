@@ -13,6 +13,10 @@
 </p>
 
 <p align="center">
+  <b>If Grass saved you a keystroke, a ⭐ helps others find it.</b>
+</p>
+
+<p align="center">
   <img alt="Grass demo" src="https://raw.githubusercontent.com/mukundzha/grass/main/docs/demo.gif" width="760">
 </p>
 

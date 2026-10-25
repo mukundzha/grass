@@ -138,6 +138,115 @@ def test_cursor_hidden_on_splash():
     assert screen.cursor_visible(state) is True
 
 
+def test_sync_scroll_keeps_wide_character_whole():
+    state = {"lines": ["aaaaaaaa中"], "cy": 0, "top": 0, "cx": 8, "left": 0}
+    screen.sync_scroll(state, 10, 12)
+    assert state["left"] == 2
+
+
+def test_place_cursor_after_wide_character():
+    calls = []
+
+    class FakeScreen:
+        def move(self, row, column):
+            calls.append((row, column))
+
+    state = {
+        "path": "notes.txt",
+        "modified": False,
+        "lines": ["中a"],
+        "cy": 0,
+        "cx": 1,
+        "top": 0,
+        "left": 0,
+        "prompt": None,
+    }
+    screen.place_cursor(FakeScreen(), state, 10, 40)
+    assert calls[-1] == (0, 5)
+
+
+def test_place_cursor_counts_wide_prompt_input():
+    calls = []
+
+    class FakeScreen:
+        def move(self, row, column):
+            calls.append((row, column))
+
+    state = {
+        "path": None,
+        "modified": False,
+        "lines": [""],
+        "cy": 0,
+        "cx": 0,
+        "top": 0,
+        "left": 0,
+        "prompt": {"kind": "open", "question": "Open: ", "input": "中"},
+    }
+    screen.place_cursor(FakeScreen(), state, 10, 40)
+    assert calls[-1] == (8, 10)
+
+
+def test_draw_highlights_aligns_wide_character():
+    calls = []
+
+    class FakeScreen:
+        def getmaxyx(self):
+            return (10, 40)
+
+        def addstr(self, row, column, text, style):
+            calls.append((row, column, text))
+
+    screen.setup_plain_colors()
+    state = {
+        "lines": ["a中b"],
+        "spans": [[(0, 1, "keyword"), (1, 1, "string"), (2, 1, "text")]],
+        "spans_version": 0,
+        "version": 0,
+        "cy": 0,
+        "cx": 0,
+        "left": 0,
+        "matches": [],
+    }
+    screen.draw_highlights(FakeScreen(), state, 0, 0, 3, 20, False)
+    assert calls == [(0, 3, "a"), (0, 4, "中"), (0, 6, "b")]
+
+
+def test_draw_matches_aligns_wide_character():
+    calls = []
+
+    class FakeScreen:
+        def getmaxyx(self):
+            return (10, 40)
+
+        def addstr(self, row, column, text, style):
+            calls.append((row, column, text))
+
+    screen.setup_plain_colors()
+    state = {
+        "lines": ["a中b"],
+        "matches": [(0, 1, 1)],
+        "cy": 0,
+        "cx": 1,
+        "left": 0,
+    }
+    screen.draw_matches(FakeScreen(), state, 0, 0, 3, 20)
+    assert calls == [(0, 4, "中")]
+
+
+def test_safe_addstr_does_not_split_wide_character():
+    calls = []
+
+    class FakeScreen:
+        def getmaxyx(self):
+            return (10, 2)
+
+        def addstr(self, row, column, text, style):
+            calls.append((row, column, text))
+
+    screen.safe_addstr(FakeScreen(), 0, 0, "a中b", 0)
+    assert calls == [(0, 0, "a")]
+
+
 def test_search_progress_for_replace_prompts():
     state = {"prompt": {"kind": "replace", "input": "foo"}, "matches": [(0, 0, 3)], "cy": 0, "cx": 0}
     assert screen.search_progress(state) == "1 of 1"

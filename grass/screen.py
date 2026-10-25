@@ -5,7 +5,7 @@ import sys
 from grass import VERSION
 from grass.highlight import cached_spans
 from grass.search import index_at_cursor, update_matches
-from grass.tabs import display_column, expand_tabs
+from grass.tabs import column_boundary, display_column, display_width, text_in_columns, truncate_width
 
 STRIP_BACKGROUND = 236
 STATUS_BACKGROUND = 237
@@ -190,14 +190,14 @@ def safe_addstr(screen, row, column, text, style):
     if column >= width:
         return
     if column < 0:
-        cut = -column
-        text = text[cut:]
+        text = text_in_columns(text, -column, -column + width)
         column = 0
     if text == "":
         return
     room = width - column
-    if len(text) > room:
-        text = text[:room]
+    text = truncate_width(text, room)
+    if text == "":
+        return
     try:
         screen.addstr(row, column, text, style)
     except curses.error:
@@ -309,7 +309,7 @@ def draw_splash(screen, state, height, width):
         color = entry[1]
         row = start_row + row_index
         if text != "" and row < view_rows:
-            column = (width - len(text)) // 2
+            column = (width - display_width(text)) // 2
             if column < 0:
                 column = 0
             safe_addstr(screen, row, column, text, attr(color))
@@ -355,11 +355,19 @@ def sync_scroll(state, height, width):
     if state["cy"] >= state["top"] + view_rows:
         state["top"] = state["cy"] - view_rows + 1
     text_width = text_area_width(state, width)
-    cursor_column = display_column(state["lines"][state["cy"]], state["cx"])
+    line = state["lines"][state["cy"]]
+    cursor_column = display_column(line, state["cx"])
     if cursor_column < state["left"]:
         state["left"] = cursor_column
     if cursor_column >= state["left"] + text_width:
         state["left"] = cursor_column - text_width + 1
+    if state["cx"] < len(line):
+        cursor_end = display_column(line, state["cx"] + 1)
+        if cursor_end > state["left"] + text_width:
+            state["left"] = cursor_end - text_width
+    if state["left"] < 0:
+        state["left"] = 0
+    state["left"] = column_boundary(line, state["left"])
 
 
 def draw(screen, state):
@@ -412,7 +420,6 @@ def draw_text_row(screen, state, row, line_index, gutter, text_width, width):
 
 def draw_highlights(screen, state, row, line_index, gutter, text_width, on_cursor):
     line = state["lines"][line_index]
-    expanded = expand_tabs(line)
     spans = cached_spans(state)
     line_spans = []
     if line_index < len(spans):
@@ -420,7 +427,7 @@ def draw_highlights(screen, state, row, line_index, gutter, text_width, on_curso
     left = state["left"]
     visible_end = left + text_width
     if len(line_spans) == 0:
-        visible = expanded[left:visible_end]
+        visible = text_in_columns(line, left, visible_end)
         if on_cursor:
             safe_addstr(screen, row, gutter, visible, attr_current("text"))
         else:
@@ -440,7 +447,7 @@ def draw_highlights(screen, state, row, line_index, gutter, text_width, on_curso
             take_end = end
             if take_end > visible_end:
                 take_end = visible_end
-            piece = expanded[take_start:take_end]
+            piece = text_in_columns(line, take_start, take_end)
             column = gutter + (take_start - left)
             if on_cursor:
                 safe_addstr(screen, row, column, piece, attr_current(color))
@@ -454,7 +461,6 @@ def draw_matches(screen, state, row, line_index, gutter, text_width):
     if len(matches) == 0:
         return
     line = state["lines"][line_index]
-    expanded = expand_tabs(line)
     left = state["left"]
     visible_end = left + text_width
     for match in matches:
@@ -475,7 +481,7 @@ def draw_matches(screen, state, row, line_index, gutter, text_width):
         color = "match"
         if line_index == state["cy"] and state["cx"] >= match[1] and state["cx"] < match[1] + match[2]:
             color = "match_current"
-        piece = expanded[take_start:take_end]
+        piece = text_in_columns(line, take_start, take_end)
         column = gutter + (take_start - left)
         safe_addstr(screen, row, column, piece, attr(color))
 
@@ -513,8 +519,9 @@ def draw_message_bar(screen, state, height, width):
         fill_row(screen, row, width, "strip")
         question = prompt["question"]
         safe_addstr(screen, row, 0, PROMPT_PREFIX, attr("accent"))
-        safe_addstr(screen, row, len(PROMPT_PREFIX), question, attr("message"))
-        input_column = len(PROMPT_PREFIX) + len(question)
+        prefix_width = display_width(PROMPT_PREFIX)
+        safe_addstr(screen, row, prefix_width, question, attr("message"))
+        input_column = prefix_width + display_width(question)
         safe_addstr(screen, row, input_column, prompt["input"], attr("prompt"))
         return
     if state["message"] != "":
@@ -566,15 +573,16 @@ def draw_status_bar(screen, state, height, width):
         name = "(untitled)"
     base = os.path.basename(name)
     column = 2
+    base_width = display_width(base)
     safe_addstr(screen, row, column, base, attr("status_name"))
     dot = status_dot(state)
     if dot != "":
-        dot_column = column + len(base) + 1
+        dot_column = column + base_width + 1
         safe_addstr(screen, row, dot_column, dot, attr("status_modified"))
     cursor_column = display_column(state["lines"][state["cy"]], state["cx"]) + 1
     right = str(state["cy"] + 1) + "," + str(cursor_column)
     right_column = width - len(right) - 2
-    left_limit = column + len(base) + 1
+    left_limit = column + base_width + 1
     marker_column = right_column
     progress = search_progress(state)
     if progress != "":
@@ -603,7 +611,7 @@ def place_cursor(screen, state, height, width):
     set_cursor_visible(True)
     if prompt is not None:
         row = height - 2
-        column = len(PROMPT_PREFIX) + len(prompt["question"]) + len(prompt["input"])
+        column = display_width(PROMPT_PREFIX) + display_width(prompt["question"]) + display_width(prompt["input"])
     else:
         row = state["cy"] - state["top"]
         line = state["lines"][state["cy"]]

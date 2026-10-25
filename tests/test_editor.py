@@ -3,7 +3,7 @@ import shutil
 import tempfile
 
 from grass import editor
-from grass.tabs import expand_tabs
+from grass.tabs import column_boundary, expand_tabs, text_in_columns, truncate_width
 
 
 def fail_replace(source, target):
@@ -77,6 +77,80 @@ def test_char_index_at_column_skips_tab_interior():
     assert editor.char_index_at_column("a\tb", 3) == 1
     assert editor.char_index_at_column("a\tb", 4) == 2
     assert editor.char_index_at_column("a\tb", 5) == 3
+
+
+def test_display_column_counts_wide_characters():
+    assert editor.display_column("中a", 0) == 0
+    assert editor.display_column("中a", 1) == 2
+    assert editor.display_column("中a", 2) == 3
+
+
+def test_char_index_at_column_keeps_wide_characters_whole():
+    assert editor.char_index_at_column("中a", 1) == 0
+    assert editor.char_index_at_column("中a", 2) == 1
+    assert editor.char_index_at_column("中a", 3) == 2
+
+
+def test_expand_tabs_uses_wide_character_width():
+    assert expand_tabs("中\tb") == "中  b"
+
+
+def test_text_in_columns_clips_wide_characters():
+    assert text_in_columns("a中b", 0, 1) == "a"
+    assert text_in_columns("a中b", 1, 3) == "中"
+    assert text_in_columns("a中b", 1, 4) == "中b"
+    assert text_in_columns("中a", 0, 1) == ""
+
+
+def test_truncate_width_does_not_split_wide_character():
+    assert truncate_width("a中b", 2) == "a"
+    assert truncate_width("a中b", 3) == "a中"
+
+
+def test_column_boundary_snaps_inside_wide_character():
+    assert column_boundary("a中b", 2) == 1
+
+
+def test_tab_after_wide_character_aligns_to_stop():
+    state = editor.plain_state()
+    state["lines"] = ["中"]
+    state["cx"] = 1
+    editor.insert_tab(state)
+    assert state["lines"][0] == "中  "
+    assert state["cx"] == 3
+
+
+def test_move_right_moves_over_wide_character():
+    state = editor.plain_state()
+    state["lines"] = ["中"]
+    editor.move_right(state)
+    assert state["cx"] == 1
+
+
+def test_move_left_moves_over_wide_character():
+    state = editor.plain_state()
+    state["lines"] = ["中"]
+    state["cx"] = 1
+    editor.move_left(state)
+    assert state["cx"] == 0
+
+
+def test_move_down_does_not_land_inside_wide_character():
+    state = editor.plain_state()
+    state["lines"] = ["a", "中x"]
+    state["cy"] = 0
+    state["cx"] = 1
+    editor.move_down(state)
+    assert state["cy"] == 1
+    assert state["cx"] == 0
+
+
+def test_backspace_deletes_wide_character():
+    state = editor.plain_state()
+    editor.insert_text(state, "中")
+    editor.backspace(state)
+    assert state["lines"] == [""]
+    assert state["cx"] == 0
 
 
 def test_backspace_deletes_character():

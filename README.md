@@ -44,14 +44,15 @@ pipx install grass-editor
 | **`Ctrl-F` live search** | Results update as you type. |
 | **Safe with your files** | Atomic saves. Tabs preserved. A missing trailing newline stays missing, and the status bar tells you. |
 | **Language coverage** | C, C++, Rust, Go, JavaScript, TypeScript, Python, Ruby, Java, shell, HTML, CSS, JSON, YAML, Markdown, and more via Pygments. |
+| **CJK ready** | Chinese, Japanese, and Korean text renders, edits, and scrolls at the correct width. |
 | **Zero config** | No config file exists. Nothing can break. |
-| **Readable source** | About 2,200 lines of Python. Read it in an afternoon, change it in an evening. |
+| **Readable source** | About 2,300 lines of Python. Read it in an afternoon, change it in an evening. |
 
 ## Why not just use...?
 
 | | Setup needed | Learn first? | Fuzzy finder | Source you can read in a day |
 |---|---|---|---|---|
-| **Grass** | none | no | built in | yes (~2,200 lines) |
+| **Grass** | none | no | built in | yes (~2,300 lines) |
 | nano | none | no | no | no |
 | micro | none | little | no | no |
 | vim / Helix | some to a lot | yes (modal) | plugin / built in | no |
@@ -90,9 +91,15 @@ Normal files are fast. Highlighting only covers the visible area and updates aft
 </details>
 
 <details>
-<summary><b>What about CJK and very long lines?</b></summary>
+<summary><b>Does it handle Chinese, Japanese, or Korean text?</b></summary>
 
-Wide characters and long wrapped lines aren't fully supported yet. They're on the roadmap.
+Yes. Wide characters render, edit, and scroll at the correct terminal width.
+</details>
+
+<details>
+<summary><b>What about very long lines?</b></summary>
+
+Lines don't wrap yet. Scroll horizontally instead.
 </details>
 
 <details>
@@ -126,7 +133,7 @@ CI runs on Python 3.9 through 3.13. New here? Look for [`good first issue`](http
 
 ## Roadmap
 
-- [ ] Wide character (CJK) support
+- [ ] Line wrapping for long lines
 - [ ] Faster highlighting for very large files
 - [ ] Light theme
 

@@ -128,6 +128,16 @@ def test_missing_newline_flag():
     assert screen.missing_newline(state) is False
 
 
+def test_cursor_hidden_on_splash():
+    state = {"path": None, "modified": False, "lines": [""], "prompt": None}
+    assert screen.cursor_visible(state) is False
+    state["prompt"] = {"kind": "open", "question": "Open: ", "input": ""}
+    assert screen.cursor_visible(state) is True
+    state["prompt"] = None
+    state["path"] = "notes.txt"
+    assert screen.cursor_visible(state) is True
+
+
 def test_search_progress_for_replace_prompts():
     state = {"prompt": {"kind": "replace", "input": "foo"}, "matches": [(0, 0, 3)], "cy": 0, "cx": 0}
     assert screen.search_progress(state) == "1 of 1"

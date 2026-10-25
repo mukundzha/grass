@@ -1,100 +1,133 @@
-# Grass
+<h1 align="center">🌱 Grass</h1>
 
-A calm, zero-config terminal code editor.
+<p align="center">
+  <b>The terminal editor you already know how to use.</b><br>
+  Syntax highlighting, fuzzy finder, find-as-you-type. No modes, no config, no learning curve.
+</p>
 
-No modes. No config files. Just type.
+<p align="center">
+  <a href="https://pypi.org/project/grass-editor/"><img alt="PyPI" src="https://img.shields.io/pypi/v/grass-editor.svg"></a>
+  <img alt="Python" src="https://img.shields.io/pypi/pyversions/grass-editor.svg">
+  <a href="https://github.com/mukundzha/grass/actions/workflows/tests.yml"><img alt="tests" src="https://github.com/mukundzha/grass/actions/workflows/tests.yml/badge.svg"></a>
+  <a href="https://github.com/mukundzha/grass/blob/main/LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/mukundzha/grass.svg"></a>
+</p>
 
-[![tests](https://github.com/mukundzha/grass/actions/workflows/tests.yml/badge.svg)](https://github.com/mukundzha/grass/actions/workflows/tests.yml)
-[![PyPI](https://img.shields.io/pypi/v/grass-editor.svg)](https://pypi.org/project/grass-editor/)
+<p align="center">
+  <img alt="Grass demo" src="https://raw.githubusercontent.com/mukundzha/grass/main/docs/demo.gif" width="760">
+</p>
 
-![Grass demo](https://raw.githubusercontent.com/mukundzha/grass/17b0c4e/docs/demo.gif)
+### Try it in 10 seconds. Nothing to install.
 
-## Why
+```bash
+pipx run --spec grass-editor grass hello.py
+```
 
-Nano starts instantly but stays plain. Vim and Helix are powerful, but they ask
-you to learn an editing language first. Grass sits between them: one mode, one
-theme, syntax highlighting, and about 1,700 lines of Python you can read in an
-afternoon.
-
-It is not a Vim replacement. No plugins, no LSP, no mouse. One file at a time,
-on purpose.
-
-## Install
+### Keep it
 
 ```bash
 pipx install grass-editor
 ```
 
-No pipx? `pip install grass-editor` also works. On Windows, install curses
-support first:
-
-```bash
-pip install windows-curses
-pip install grass-editor
-```
-
-Python 3.9 or newer.
-
-## Run
+Then open a file:
 
 ```bash
 grass hello.py
 ```
 
-With no file, `grass` opens the splash. `grass --version` prints the version.
+No file? Grass opens a read-only splash. Press `Ctrl-O` to open a path or `Ctrl-P` to pick a file.
 
-## A look
+<sub>No pipx? `pip install grass-editor` works too. Python 3.9+. <a href="#windows">Windows notes</a>.</sub>
 
-| Splash | Ctrl-P finder |
-| --- | --- |
-| ![Grass splash](https://raw.githubusercontent.com/mukundzha/grass/main/docs/splash.png) | ![Grass finder](https://raw.githubusercontent.com/mukundzha/grass/main/docs/finder.png) |
+---
 
-One theme, Meadow: warm off-white text, green keywords, gold functions, a dark
-status bar. It assumes a dark 256-color terminal; basic colors fall back.
+## Sound familiar?
 
-## Keys
+- You SSH into a box and `nano` feels bare, but `vim` feels like a test.
+- You don't want to spend a weekend on dotfiles just to edit a file.
+- You want highlighting and a fast file jump, not a whole IDE in your terminal.
+
+**Grass is for that moment.** Open a file and type. Everything else is one `Ctrl` key away.
+
+## What you get
+
+| | |
+|---|---|
+| **Just type** | One mode, like nano. Nothing to memorize before your first edit. |
+| **Looks good by default** | Syntax highlighting with Meadow, a calm warm theme. No theme hunting. Assumes a dark 256-color terminal; basic colors fall back gracefully. |
+| **`Ctrl-P` fuzzy finder** | Jump to any file by typing a few letters. |
+| **`Ctrl-F` live search** | Results update as you type. |
+| **Safe with your files** | Atomic saves. Tabs preserved. A missing trailing newline stays missing, and the status bar tells you. |
+| **Language coverage** | C, C++, Rust, Go, JavaScript, TypeScript, Python, Ruby, Java, shell, HTML, CSS, JSON, YAML, Markdown, and more via Pygments. |
+| **Zero config** | No config file exists. Nothing can break. |
+| **Readable source** | About 2,200 lines of Python. Read it in an afternoon, change it in an evening. |
+
+## Why not just use...?
+
+| | Setup needed | Learn first? | Fuzzy finder | Source you can read in a day |
+|---|---|---|---|---|
+| **Grass** | none | no | built in | yes (~2,200 lines) |
+| nano | none | no | no | no |
+| micro | none | little | no | no |
+| vim / Helix | some to a lot | yes (modal) | plugin / built in | no |
+
+Grass is **not** trying to replace Vim or micro. It has no plugins, no LSP, and no mouse, on purpose. If you want those, use them. If you want an editor that gets out of the way, you're in the right place.
+
+## The whole keyboard
 
 | Key | Action |
-| --- | --- |
-| type | edit |
-| arrows, Home, End, PageUp, PageDown | move |
-| Enter | new line, with auto-indent |
-| Tab | indent to the next tab stop |
-| Backspace, Delete | delete |
-| Ctrl-F | find as you type |
-| F3 | find next |
-| Ctrl-H | replace all (word, then replacement) |
-| Ctrl-P | fuzzy file finder |
-| Ctrl-O | open by path |
-| Ctrl-K | cut line |
-| Ctrl-U | paste line |
-| Ctrl-S | save (asks for a name if new) |
-| Ctrl-Z | undo |
-| Ctrl-R | redo |
-| Ctrl-Q, Ctrl-C | quit |
+|---|---|
+| `Ctrl-S` | save (asks for a name if new) |
+| `Ctrl-Q` / `Ctrl-C` | quit |
+| `Ctrl-P` | fuzzy file finder |
+| `Ctrl-F` / `F3` | find as you type / find next |
+| `Ctrl-H` | replace all (word, then replacement) |
+| `Ctrl-O` | open by path |
+| `Ctrl-Z` / `Ctrl-R` | undo / redo |
+| `Ctrl-K` / `Ctrl-U` | cut line / paste line |
 
-| Prompt key | Action |
-| --- | --- |
-| Enter | confirm or move to the next step |
-| Esc | cancel, close, or clear search |
-| Up, Down | select a file finder result |
-| Y, N | save or discard at the quit prompt |
+Arrows, Home, End, PageUp, PageDown, Enter (auto-indent), Tab, Backspace and Delete do what you expect.
 
-The replace flow is: `Ctrl-H`, type the word, `Enter`, type the replacement,
-`Enter`. Every match is replaced.
+In prompts, `Enter` confirms, `Esc` cancels, `Up`/`Down` select, and `Y`/`N` answer save/discard. The replace flow is: `Ctrl-H`, type the word, `Enter`, type the replacement, `Enter`.
 
-## Notes
+## FAQ
 
-- Always in typing mode, like nano.
-- Saves are atomic: a crash cannot leave the original file truncated.
-- Tabs are preserved and shown at 4-column stops.
-- A file without a trailing newline stays that way. The status bar says `no newline`.
-- Highlighting is limited to the visible area and updates after a short pause, so typing stays fast in large files.
-- Highlighting covers C, C++, Perl, JavaScript, TypeScript, Go, Rust, Ruby,
-  Java, shell, HTML, CSS, JSON, YAML, Markdown, and other Pygments languages.
-- Wide characters (CJK) and long wrapped lines are not fully supported yet.
+<details>
+<summary><b>Does it support plugins, LSP, or multiple files?</b></summary>
 
-## Development
+No, and that's the point. One file at a time, no plugins, no LSP, no mouse. Grass stays small so it stays calm.
+</details>
+
+<details>
+<summary><b>Will it handle my big files?</b></summary>
+
+Normal files are fast. Highlighting only covers the visible area and updates after a short pause, so very large files stay usable, but can still feel slower than small ones.
+</details>
+
+<details>
+<summary><b>What about CJK and very long lines?</b></summary>
+
+Wide characters and long wrapped lines aren't fully supported yet. They're on the roadmap.
+</details>
+
+<details>
+<summary id="windows"><b>How do I install on Windows?</b></summary>
+
+```bash
+py -m pip install windows-curses grass-editor
+```
+
+Then run `grass hello.py` from the same Python environment. Using `pipx`? Run `pipx inject grass-editor windows-curses` after installing.
+</details>
+
+## Hack on it
+
+Grass is small enough to understand completely.
+
+- `grass/editor.py`: text buffer, undo/redo, prompts, atomic saves
+- `grass/highlight.py`: Pygments lexing and Meadow colors
+- `grass/screen.py`: curses rendering, splash, finder, status bar
+- `grass/search.py`: find matching and match tracking
+- `grass/tabs.py`: tab widths and display columns
 
 ```bash
 git clone https://github.com/mukundzha/grass.git
@@ -103,11 +136,22 @@ pip install -e .
 python tests/run_tests.py
 ```
 
-Tests are plain functions with a small custom runner. CI runs on Python 3.9
-through 3.13.
+CI runs on Python 3.9 through 3.13. New here? Look for [`good first issue`](https://github.com/mukundzha/grass/labels/good%20first%20issue).
+
+## Roadmap
+
+- [ ] Wide character (CJK) support
+- [ ] Faster highlighting for very large files
+- [ ] Light theme
+
+Ideas and bug reports are welcome: [open an issue](https://github.com/mukundzha/grass/issues).
 
 ## License
 
 MIT. See [LICENSE](https://github.com/mukundzha/grass/blob/main/LICENSE).
 
-Issues and PRs are welcome.
+---
+
+<p align="center">
+  <b>Grass saved you a few keystrokes?</b> Give it a ⭐ so other people can find it.
+</p>

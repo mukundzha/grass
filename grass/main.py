@@ -9,7 +9,7 @@ USAGE = "usage: grass [file]\n       grass --version"
 
 def reset_cursor():
     try:
-        sys.stdout.write("\x1b[0 q")
+        sys.stdout.write("\x1b[?25h\x1b[0 q")
         sys.stdout.flush()
     except OSError:
         pass

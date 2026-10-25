@@ -79,6 +79,18 @@ BASIC_FOREGROUNDS = {
 
 ATTRS = {}
 CURRENT_ATTRS = {}
+CURSOR_VISIBLE = None
+
+
+def set_cursor_visible(visible):
+    global CURSOR_VISIBLE
+    if CURSOR_VISIBLE == visible:
+        return
+    try:
+        curses.curs_set(1 if visible else 0)
+    except curses.error:
+        pass
+    CURSOR_VISIBLE = visible
 
 
 def setup_screen(screen):
@@ -93,10 +105,7 @@ def setup_screen(screen):
         pass
     except curses.error:
         pass
-    try:
-        curses.curs_set(1)
-    except curses.error:
-        pass
+    set_cursor_visible(True)
     try:
         sys.stdout.write("\x1b[r\x1b[?7l\x1b[5 q")
         sys.stdout.flush()
@@ -282,9 +291,9 @@ def splash_lines(width):
     lines.append(("v" + VERSION + " · Meadow", "comment"))
     lines.append(("", "text"))
     if width >= 46:
-        lines.append(("Ctrl-S save    Ctrl-O open    Ctrl-F find    Ctrl-Q quit", "comment"))
+        lines.append(("Ctrl-O open    Ctrl-P find file    Ctrl-Q quit", "comment"))
     else:
-        lines.append(("Ctrl-S save  Ctrl-O open  Ctrl-F find", "comment"))
+        lines.append(("Ctrl-O open  Ctrl-P find  Ctrl-Q quit", "comment"))
     return lines
 
 
@@ -580,8 +589,18 @@ def draw_status_bar(screen, state, height, width):
     safe_addstr(screen, row, right_column, right, attr("status_dim"))
 
 
+def cursor_visible(state):
+    if state["prompt"] is not None:
+        return True
+    return not is_pristine(state)
+
+
 def place_cursor(screen, state, height, width):
     prompt = state["prompt"]
+    if not cursor_visible(state):
+        set_cursor_visible(False)
+        return
+    set_cursor_visible(True)
     if prompt is not None:
         row = height - 2
         column = len(PROMPT_PREFIX) + len(prompt["question"]) + len(prompt["input"])

@@ -571,6 +571,44 @@ def test_key_after_escape_is_typed():
     assert state["modified"] is True
 
 
+def test_splash_ignores_typing():
+    state = editor.plain_state()
+    editor.handle_editor_key(state, "x")
+    editor.handle_editor_key(state, "\n")
+    editor.handle_editor_key(state, 127)
+    assert state["lines"] == [""]
+    assert state["modified"] is False
+    assert state["prompt"] is None
+
+
+def test_splash_ignores_search_and_replace():
+    state = editor.plain_state()
+    editor.handle_editor_key(state, "\x06")
+    editor.handle_editor_key(state, "\x08")
+    assert state["prompt"] is None
+
+
+def test_splash_allows_open_prompt_then_typing():
+    state = editor.plain_state()
+    editor.handle_editor_key(state, "\x0f")
+    assert state["prompt"]["kind"] == "open"
+    editor.handle_editor_key(state, "n")
+    assert state["prompt"]["input"] == "n"
+
+
+def test_splash_allows_quit():
+    state = editor.plain_state()
+    editor.handle_editor_key(state, "\x11")
+    assert state["quit"] is True
+
+
+def test_typing_works_after_opening_file():
+    state = editor.plain_state()
+    state["path"] = "notes.txt"
+    editor.handle_editor_key(state, "x")
+    assert state["lines"] == ["x"]
+
+
 def test_finish_search_jumps_to_first_match():
     state = editor.plain_state()
     state["lines"] = ["hello world", "world again"]

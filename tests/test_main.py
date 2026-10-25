@@ -37,4 +37,5 @@ def test_reset_cursor_restores_default_shape():
         main_module.reset_cursor()
     finally:
         sys.stdout = old_stdout
+    assert "\x1b[?25h" in buffer.getvalue()
     assert "\x1b[0 q" in buffer.getvalue()

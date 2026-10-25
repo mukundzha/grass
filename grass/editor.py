@@ -4,7 +4,7 @@ import time
 import curses
 
 from grass.highlight import get_spans, language_name, spans_cover
-from grass.screen import apply_window_title, draw, setup_screen
+from grass.screen import apply_window_title, draw, is_pristine, setup_screen
 from grass.search import find_next, first_match_index, index_at_cursor, update_matches
 from grass.tabs import TAB_WIDTH, char_index_at_column, display_column
 
@@ -975,6 +975,22 @@ def handle_escape_key(state, key):
     handle_key(state, key)
 
 
+def splash_allows(key):
+    if isinstance(key, int):
+        return False
+    if not isinstance(key, str) or len(key) != 1:
+        return False
+    code = ord(key)
+    return code == 3 or code == 15 or code == 16 or code == 17
+
+
+def handle_editor_key(state, key):
+    if state["prompt"] is None and is_pristine(state):
+        if not splash_allows(key):
+            return
+    handle_key(state, key)
+
+
 def handle_key(state, key):
     if state["escape"] is not None:
         handle_escape_key(state, key)
@@ -1045,5 +1061,5 @@ def run(screen, path):
                 finish_escape(state)
             continue
         state["message"] = ""
-        handle_key(state, key)
+        handle_editor_key(state, key)
         update_modified(state)
